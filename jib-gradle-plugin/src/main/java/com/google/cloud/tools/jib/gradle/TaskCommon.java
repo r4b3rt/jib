@@ -16,7 +16,6 @@
 
 package com.google.cloud.tools.jib.gradle;
 
-import com.google.api.client.http.HttpTransport;
 import com.google.cloud.tools.jib.ProjectInfo;
 import com.google.cloud.tools.jib.api.LogEvent;
 import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
@@ -30,7 +29,6 @@ import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.logging.Level;
 import javax.annotation.Nullable;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
@@ -110,7 +108,7 @@ class TaskCommon {
         });
 
     // Disables Google HTTP client logging.
-    java.util.logging.Logger.getLogger(HttpTransport.class.getName()).setLevel(Level.OFF);
+    // java.util.logging.Logger.getLogger(HttpTransport.class.getName()).setLevel(Level.OFF);
   }
 
   /**
