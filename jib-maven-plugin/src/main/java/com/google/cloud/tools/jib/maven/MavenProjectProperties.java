@@ -308,7 +308,9 @@ public class MavenProjectProperties implements ProjectProperties {
     JibMavenPluginExtension extension = services.next();
     try {
       for (; services.hasNext(); extension = services.next()) {
-        buildPlan = extension.extendContainerBuildPlan(buildPlan, project, session, null);
+        // TODO(chanseok): take care of logger
+        buildPlan =
+            extension.extendContainerBuildPlan(buildPlan, project, session, (level, string) -> {});
         ImageReference.parse(buildPlan.getBaseImage()); // validate image reference
       }
       return jibContainerBuilder.applyContainerBuildPlan(buildPlan);
