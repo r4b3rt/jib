@@ -23,6 +23,7 @@ import com.google.cloud.tools.jib.api.LogEvent;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 
 /** Project property methods that require maven/gradle-specific implementations. */
@@ -61,6 +62,9 @@ public interface ProjectProperties {
   JibContainerBuilder createJibContainerBuilder(
       JavaContainerBuilder javaContainerBuilder, ContainerizingMode containerizingMode)
       throws IOException;
+
+  JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
+      throws ExecutionException;
 
   List<Path> getClassFiles() throws IOException;
 

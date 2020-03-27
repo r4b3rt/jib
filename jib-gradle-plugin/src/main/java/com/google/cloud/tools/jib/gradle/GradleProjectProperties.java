@@ -255,6 +255,11 @@ public class GradleProjectProperties implements ProjectProperties {
   }
 
   @Override
+  public JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder) {
+    return jibContainerBuilder;
+  }
+
+  @Override
   public List<Path> getClassFiles() throws IOException {
     // TODO: Consolidate with createJibContainerBuilder
     JavaPluginConvention javaPluginConvention =

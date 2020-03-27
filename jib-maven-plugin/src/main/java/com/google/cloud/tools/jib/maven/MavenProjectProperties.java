@@ -17,15 +17,20 @@
 package com.google.cloud.tools.jib.maven;
 
 import com.google.cloud.tools.jib.api.Containerizer;
+import com.google.cloud.tools.jib.api.ImageReference;
+import com.google.cloud.tools.jib.api.InvalidImageReferenceException;
 import com.google.cloud.tools.jib.api.JavaContainerBuilder;
 import com.google.cloud.tools.jib.api.JavaContainerBuilder.LayerType;
 import com.google.cloud.tools.jib.api.JibContainerBuilder;
 import com.google.cloud.tools.jib.api.LogEvent;
+import com.google.cloud.tools.jib.api.buildplan.ContainerBuildPlan;
 import com.google.cloud.tools.jib.event.events.ProgressEvent;
 import com.google.cloud.tools.jib.event.events.TimerEvent;
 import com.google.cloud.tools.jib.event.progress.ProgressEventHandler;
 import com.google.cloud.tools.jib.filesystem.DirectoryWalker;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
+import com.google.cloud.tools.jib.plugins.api.maven.JibMavenPluginExtension;
+import com.google.cloud.tools.jib.plugins.api.maven.JibPluginExtensionException;
 import com.google.cloud.tools.jib.plugins.common.ContainerizingMode;
 import com.google.cloud.tools.jib.plugins.common.JavaContainerBuilderHelper;
 import com.google.cloud.tools.jib.plugins.common.ProjectProperties;
@@ -45,10 +50,13 @@ import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ServiceLoader;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -284,6 +292,30 @@ public class MavenProjectProperties implements ProjectProperties {
               + (containerizingMode == ContainerizingMode.PACKAGED ? "package" : "compile")
               + " jib:build\"?)",
           ex);
+    }
+  }
+
+  @Override
+  public JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
+      throws ExecutionException {
+    Iterator<JibMavenPluginExtension> services =
+        ServiceLoader.load(JibMavenPluginExtension.class).iterator();
+    if (!services.hasNext()) {
+      return jibContainerBuilder;
+    }
+
+    ContainerBuildPlan buildPlan = jibContainerBuilder.toContainerBuildPlan();
+    JibMavenPluginExtension extension = services.next();
+    try {
+      for (; services.hasNext(); extension = services.next()) {
+        buildPlan = extension.extendContainerBuildPlan(buildPlan, project, session, null);
+        ImageReference.parse(buildPlan.getBaseImage()); // validate image reference
+      }
+      return jibContainerBuilder.applyContainerBuildPlan(buildPlan);
+
+    } catch (InvalidImageReferenceException ex) {
+      throw new JibPluginExtensionException(
+          extension.getClass(), "invalid base image reference: " + buildPlan.getBaseImage(), ex);
     }
   }
 

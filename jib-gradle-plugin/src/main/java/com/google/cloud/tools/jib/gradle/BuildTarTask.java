@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import javax.annotation.Nullable;
 import org.gradle.api.DefaultTask;
@@ -159,6 +160,10 @@ public class BuildTarTask extends DefaultTask implements JibTask {
               + "\"USE_CURRENT_TIMESTAMP\"): "
               + ex.getInvalidCreationTime(),
           ex);
+
+    } catch (ExecutionException ex) {
+      // TODO(chanseok): cast to JibPluginExtensionException once the class is defined
+      throw new RuntimeException("BUG: cannot reach");
 
     } catch (IncompatibleBaseImageJavaVersionException ex) {
       throw new GradleException(

@@ -20,6 +20,7 @@ import com.google.cloud.tools.jib.api.CacheDirectoryCreationException;
 import com.google.cloud.tools.jib.api.InvalidImageReferenceException;
 import com.google.cloud.tools.jib.api.buildplan.ImageFormat;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
+import com.google.cloud.tools.jib.plugins.api.maven.JibPluginExtensionException;
 import com.google.cloud.tools.jib.plugins.common.BuildStepsExecutionException;
 import com.google.cloud.tools.jib.plugins.common.HelpfulSuggestions;
 import com.google.cloud.tools.jib.plugins.common.IncompatibleBaseImageJavaVersionException;
@@ -37,6 +38,7 @@ import com.google.common.base.Strings;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -138,6 +140,15 @@ public class BuildImageMojo extends JibPluginConfiguration {
               + "\"USE_CURRENT_TIMESTAMP\"): "
               + ex.getInvalidCreationTime(),
           ex);
+
+    } catch (ExecutionException ex) {
+      if (ex instanceof JibPluginExtensionException) {
+        String extensionName = ((JibPluginExtensionException) ex).getExtensionClass().getName();
+        throw new MojoExecutionException(
+            "error running third-party extension '" + extensionName + "': " + ex.getMessage(),
+            ex.getCause());
+      }
+      throw new MojoExecutionException(ex.getMessage(), ex);
 
     } catch (IncompatibleBaseImageJavaVersionException ex) {
       throw new MojoExecutionException(
