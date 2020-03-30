@@ -34,6 +34,7 @@ import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.ImageFormat;
 import com.google.cloud.tools.jib.frontend.CredentialRetrieverFactory;
 import com.google.cloud.tools.jib.global.JibSystemProperties;
+import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Verify;
@@ -52,7 +53,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -99,7 +99,7 @@ public class PluginConfigurationProcessor {
    * @throws InvalidFilesModificationTimeException if configured modification time could not be
    *     parsed
    * @throws InvalidCreationTimeException if configured creation time could not be parsed
-   * @throws ExecutionException if there was an error running plugin extensions
+   * @throws JibPluginExtensionException if an error occurred while running plugin extensions
    */
   public static JibBuildRunner createJibBuildRunnerForDockerDaemonImage(
       RawConfiguration rawConfiguration,
@@ -110,7 +110,7 @@ public class PluginConfigurationProcessor {
           IOException, InvalidWorkingDirectoryException, InvalidContainerVolumeException,
           IncompatibleBaseImageJavaVersionException, NumberFormatException,
           InvalidContainerizingModeException, InvalidFilesModificationTimeException,
-          InvalidCreationTimeException, ExecutionException {
+          InvalidCreationTimeException, JibPluginExtensionException {
     ImageReference targetImageReference =
         getGeneratedTargetDockerTag(rawConfiguration, projectProperties, helpfulSuggestions);
     DockerDaemonImage targetImage = DockerDaemonImage.named(targetImageReference);
@@ -161,7 +161,7 @@ public class PluginConfigurationProcessor {
    * @throws InvalidFilesModificationTimeException if configured modification time could not be
    *     parsed
    * @throws InvalidCreationTimeException if configured creation time could not be parsed
-   * @throws ExecutionException if there was an error running plugin extensions
+   * @throws JibPluginExtensionException if an error occurred while running plugin extensions
    */
   public static JibBuildRunner createJibBuildRunnerForTarImage(
       RawConfiguration rawConfiguration,
@@ -172,7 +172,7 @@ public class PluginConfigurationProcessor {
           IOException, InvalidWorkingDirectoryException, InvalidContainerVolumeException,
           IncompatibleBaseImageJavaVersionException, NumberFormatException,
           InvalidContainerizingModeException, InvalidFilesModificationTimeException,
-          InvalidCreationTimeException, ExecutionException {
+          InvalidCreationTimeException, JibPluginExtensionException {
     ImageReference targetImageReference =
         getGeneratedTargetDockerTag(rawConfiguration, projectProperties, helpfulSuggestions);
     TarImage targetImage =
@@ -219,7 +219,7 @@ public class PluginConfigurationProcessor {
    * @throws InvalidFilesModificationTimeException if configured modification time could not be
    *     parsed
    * @throws InvalidCreationTimeException if configured creation time could not be parsed
-   * @throws ExecutionException if there was an error running plugin extensions
+   * @throws JibPluginExtensionException if an error occurred while running plugin extensions
    */
   public static JibBuildRunner createJibBuildRunnerForRegistryImage(
       RawConfiguration rawConfiguration,
@@ -230,7 +230,7 @@ public class PluginConfigurationProcessor {
           IOException, InvalidWorkingDirectoryException, InvalidContainerVolumeException,
           IncompatibleBaseImageJavaVersionException, NumberFormatException,
           InvalidContainerizingModeException, InvalidFilesModificationTimeException,
-          InvalidCreationTimeException, ExecutionException {
+          InvalidCreationTimeException, JibPluginExtensionException {
     Preconditions.checkArgument(rawConfiguration.getToImage().isPresent());
 
     ImageReference targetImageReference = ImageReference.parse(rawConfiguration.getToImage().get());

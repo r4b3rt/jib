@@ -29,8 +29,7 @@ import com.google.cloud.tools.jib.event.events.TimerEvent;
 import com.google.cloud.tools.jib.event.progress.ProgressEventHandler;
 import com.google.cloud.tools.jib.filesystem.DirectoryWalker;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
-import com.google.cloud.tools.jib.plugins.api.maven.JibMavenPluginExtension;
-import com.google.cloud.tools.jib.plugins.api.maven.JibPluginExtensionException;
+import com.google.cloud.tools.jib.maven.extension.JibMavenPluginExtension;
 import com.google.cloud.tools.jib.plugins.common.ContainerizingMode;
 import com.google.cloud.tools.jib.plugins.common.JavaContainerBuilderHelper;
 import com.google.cloud.tools.jib.plugins.common.ProjectProperties;
@@ -41,6 +40,7 @@ import com.google.cloud.tools.jib.plugins.common.logging.ConsoleLogger;
 import com.google.cloud.tools.jib.plugins.common.logging.ConsoleLoggerBuilder;
 import com.google.cloud.tools.jib.plugins.common.logging.ProgressDisplayGenerator;
 import com.google.cloud.tools.jib.plugins.common.logging.SingleThreadedExecutor;
+import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
@@ -56,7 +56,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -297,21 +296,20 @@ public class MavenProjectProperties implements ProjectProperties {
 
   @Override
   public JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
-      throws ExecutionException {
+      throws JibPluginExtensionException {
     Iterator<JibMavenPluginExtension> services =
         ServiceLoader.load(JibMavenPluginExtension.class).iterator();
     if (!services.hasNext()) {
       return jibContainerBuilder;
     }
 
-    PluginExtensionLogAdapter logAdapter = new PluginExtensionLogAdapter(this::log);
+    MavenLogAdapter logAdapter = new MavenLogAdapter(this::log);
     ContainerBuildPlan buildPlan = jibContainerBuilder.toContainerBuildPlan();
     JibMavenPluginExtension extension = services.next();
     try {
       for (; services.hasNext(); extension = services.next()) {
-        buildPlan =
-            extension.extendContainerBuildPlan(buildPlan, project, session, logAdapter::log);
-        ImageReference.parse(buildPlan.getBaseImage()); // validate image reference
+        buildPlan = extension.extendContainerBuildPlan(buildPlan, project, session, logAdapter);
+        ImageReference.parse(buildPlan.getBaseImage()); // to validate image reference
       }
       return jibContainerBuilder.applyContainerBuildPlan(buildPlan);
 

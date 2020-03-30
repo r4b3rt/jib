@@ -30,12 +30,12 @@ import com.google.cloud.tools.jib.plugins.common.InvalidFilesModificationTimeExc
 import com.google.cloud.tools.jib.plugins.common.InvalidWorkingDirectoryException;
 import com.google.cloud.tools.jib.plugins.common.MainClassInferenceException;
 import com.google.cloud.tools.jib.plugins.common.PluginConfigurationProcessor;
+import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import com.google.common.base.Preconditions;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import javax.annotation.Nullable;
 import org.gradle.api.DefaultTask;
@@ -161,9 +161,10 @@ public class BuildTarTask extends DefaultTask implements JibTask {
               + ex.getInvalidCreationTime(),
           ex);
 
-    } catch (ExecutionException ex) {
-      // TODO(chanseok): cast to JibPluginExtensionException once the class is defined
-      throw new RuntimeException("BUG: cannot reach");
+    } catch (JibPluginExtensionException ex) {
+      String extensionName = ex.getExtensionClass().getName();
+      throw new GradleException(
+          "error running extension '" + extensionName + "': " + ex.getMessage(), ex);
 
     } catch (IncompatibleBaseImageJavaVersionException ex) {
       throw new GradleException(

@@ -1,18 +1,19 @@
 package com.google.cloud.tools.jib.maven;
 
 import com.google.cloud.tools.jib.api.LogEvent;
-import com.google.cloud.tools.jib.plugins.api.maven.JibMavenPluginExtension;
+import com.google.cloud.tools.jib.plugins.extension.ExtensionLogger;
 import java.util.function.Consumer;
 
-class PluginExtensionLogAdapter {
+class MavenLogAdapter implements ExtensionLogger {
 
   private final Consumer<LogEvent> logger;
 
-  PluginExtensionLogAdapter(Consumer<LogEvent> logger) {
+  MavenLogAdapter(Consumer<LogEvent> logger) {
     this.logger = logger;
   }
 
-  void log(JibMavenPluginExtension.LogLevel logLevel, String message) {
+  @Override
+  public void log(ExtensionLogger.LogLevel logLevel, String message) {
     switch (logLevel) {
       case ERROR:
         logger.accept(LogEvent.error(message));
