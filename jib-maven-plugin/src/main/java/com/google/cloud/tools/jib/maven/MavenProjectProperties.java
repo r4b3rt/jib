@@ -304,13 +304,13 @@ public class MavenProjectProperties implements ProjectProperties {
       return jibContainerBuilder;
     }
 
+    PluginExtensionLogAdapter logAdapter = new PluginExtensionLogAdapter(this::log);
     ContainerBuildPlan buildPlan = jibContainerBuilder.toContainerBuildPlan();
     JibMavenPluginExtension extension = services.next();
     try {
       for (; services.hasNext(); extension = services.next()) {
-        // TODO(chanseok): take care of logger
         buildPlan =
-            extension.extendContainerBuildPlan(buildPlan, project, session, (level, string) -> {});
+            extension.extendContainerBuildPlan(buildPlan, project, session, logAdapter::log);
         ImageReference.parse(buildPlan.getBaseImage()); // validate image reference
       }
       return jibContainerBuilder.applyContainerBuildPlan(buildPlan);
