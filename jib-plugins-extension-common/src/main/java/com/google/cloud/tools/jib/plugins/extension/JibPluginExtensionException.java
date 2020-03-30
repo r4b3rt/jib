@@ -14,14 +14,14 @@
  * the License.
  */
 
-package com.google.cloud.tools.jib.plugins.api.maven;
+package com.google.cloud.tools.jib.plugins.extension;
 
 import java.util.concurrent.ExecutionException;
 
 /** Exception while running Jib plugin extensions. */
 public class JibPluginExtensionException extends ExecutionException {
 
-  private final Class<? extends JibMavenPluginExtension> extensionClass;
+  private final Class<? extends JibPluginExtension> extensionClass;
 
   /**
    * Constructs a new exception.
@@ -30,7 +30,7 @@ public class JibPluginExtensionException extends ExecutionException {
    * @param message the detail message
    */
   public JibPluginExtensionException(
-      Class<? extends JibMavenPluginExtension> extensionClass, String message) {
+      Class<? extends JibPluginExtension> extensionClass, String message) {
     super(message);
     this.extensionClass = extensionClass;
   }
@@ -43,7 +43,7 @@ public class JibPluginExtensionException extends ExecutionException {
    * @param cause the cause
    */
   public JibPluginExtensionException(
-      Class<? extends JibMavenPluginExtension> extensionClass, String message, Throwable cause) {
+      Class<? extends JibPluginExtension> extensionClass, String message, Throwable cause) {
     super(message, cause);
     this.extensionClass = extensionClass;
   }
@@ -53,7 +53,7 @@ public class JibPluginExtensionException extends ExecutionException {
    *
    * @return originating extension class
    */
-  public Class<? extends JibMavenPluginExtension> getExtensionClass() {
+  public Class<? extends JibPluginExtension> getExtensionClass() {
     return extensionClass;
   }
 }
