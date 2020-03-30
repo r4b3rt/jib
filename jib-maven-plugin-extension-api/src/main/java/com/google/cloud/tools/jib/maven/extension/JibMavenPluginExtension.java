@@ -14,10 +14,12 @@
  * the License.
  */
 
-package com.google.cloud.tools.jib.plugins.api.maven;
+package com.google.cloud.tools.jib.maven.extension;
 
 import com.google.cloud.tools.jib.api.buildplan.ContainerBuildPlan;
-import java.util.function.BiConsumer;
+import com.google.cloud.tools.jib.plugins.extension.ExtensionLogger;
+import com.google.cloud.tools.jib.plugins.extension.JibPluginExtension;
+import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import org.apache.maven.execution.MavenSession;
 import org.apache.maven.project.MavenProject;
 
@@ -26,21 +28,21 @@ import org.apache.maven.project.MavenProject;
  * of the Jib Maven plugin, the Jib plugin extension framework calls the interface method of the
  * class.
  */
-public interface JibMavenPluginExtension {
+public interface JibMavenPluginExtension extends JibPluginExtension {
 
-  /** Log levels, in order of verbosity. */
-  enum LogLevel {
-    ERROR,
-    WARN,
-    LIFECYCLE,
-    INFO,
-    DEBUG
-  }
-
+  /**
+   * Extends the build plan prepared by the Jib Maven plugin.
+   *
+   * @param buildPlan original build plan prepared by the Jib Maven plugin
+   * @param project the {@link MavenProject}
+   * @param session the {@link MavenSession}
+   * @param logger logger for writing log messages
+   * @return updated build plan
+   */
   ContainerBuildPlan extendContainerBuildPlan(
       ContainerBuildPlan buildPlan,
       MavenProject project,
       MavenSession session,
-      BiConsumer<LogLevel, String> consoleLogger)
+      ExtensionLogger logger)
       throws JibPluginExtensionException;
 }
