@@ -21,11 +21,11 @@ import com.google.cloud.tools.jib.plugins.extension.ExtensionLogger;
 import java.util.function.Consumer;
 
 /** Logger for Maven plugin extensions. */
-class MavenLogAdapter implements ExtensionLogger {
+class MavenExtensionLogger implements ExtensionLogger {
 
   private final Consumer<LogEvent> logger;
 
-  MavenLogAdapter(Consumer<LogEvent> logger) {
+  MavenExtensionLogger(Consumer<LogEvent> logger) {
     this.logger = logger;
   }
 
