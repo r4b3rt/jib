@@ -2,8 +2,6 @@ plugins {
   id 'java-gradle-plugin'
   id 'net.researchgate.release'
   id 'com.gradle.plugin-publish'
-  // for local build/test
-  id 'maven'
   // for eclipse import modifications
   id 'eclipse'
 }
@@ -16,10 +14,10 @@ repositories {
 dependencies {
   sourceProject project(':jib-core')
   sourceProject project(':jib-plugins-common')
-  ensureNoProjectDependencies()
 
   sourceProject project(':jib-build-plan')
   sourceProject project(':jib-plugins-extension-common')
+  ensureNoProjectDependencies()
 
   testImplementation "junit:junit:${dependencyVersions.JUNIT}"
   testImplementation "org.mockito:mockito-core:${dependencyVersions.MOCKITO_CORE}"
