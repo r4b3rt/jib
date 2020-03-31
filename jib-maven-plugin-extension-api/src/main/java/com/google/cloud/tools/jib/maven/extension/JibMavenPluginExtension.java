@@ -38,6 +38,7 @@ public interface JibMavenPluginExtension extends JibPluginExtension {
    * @param session the {@link MavenSession}
    * @param logger logger for writing log messages
    * @return updated build plan
+   * @throws JibPluginExtensionException if an error occurs while running the plugin extension
    */
   ContainerBuildPlan extendContainerBuildPlan(
       ContainerBuildPlan buildPlan,
