@@ -63,9 +63,6 @@ public interface ProjectProperties {
       JavaContainerBuilder javaContainerBuilder, ContainerizingMode containerizingMode)
       throws IOException;
 
-  JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
-      throws JibPluginExtensionException;
-
   List<Path> getClassFiles() throws IOException;
 
   Path getDefaultCacheDirectory();
@@ -89,4 +86,7 @@ public interface ProjectProperties {
   int getMajorJavaVersion();
 
   boolean isOffline();
+
+  JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
+      throws JibPluginExtensionException;
 }

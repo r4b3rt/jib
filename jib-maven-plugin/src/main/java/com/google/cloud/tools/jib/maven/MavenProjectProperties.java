@@ -294,31 +294,6 @@ public class MavenProjectProperties implements ProjectProperties {
     }
   }
 
-  @Override
-  public JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
-      throws JibPluginExtensionException {
-    Iterator<JibMavenPluginExtension> services =
-        ServiceLoader.load(JibMavenPluginExtension.class).iterator();
-    if (!services.hasNext()) {
-      return jibContainerBuilder;
-    }
-
-    MavenLogAdapter logAdapter = new MavenLogAdapter(this::log);
-    ContainerBuildPlan buildPlan = jibContainerBuilder.toContainerBuildPlan();
-    JibMavenPluginExtension extension = services.next();
-    try {
-      for (; services.hasNext(); extension = services.next()) {
-        buildPlan = extension.extendContainerBuildPlan(buildPlan, project, session, logAdapter);
-        ImageReference.parse(buildPlan.getBaseImage()); // to validate image reference
-      }
-      return jibContainerBuilder.applyContainerBuildPlan(buildPlan);
-
-    } catch (InvalidImageReferenceException ex) {
-      throw new JibPluginExtensionException(
-          extension.getClass(), "invalid base image reference: " + buildPlan.getBaseImage(), ex);
-    }
-  }
-
   @VisibleForTesting
   Map<LayerType, List<Path>> classifyDependencies(
       Set<Artifact> dependencies, Set<Artifact> projectArtifacts) {
@@ -552,5 +527,31 @@ public class MavenProjectProperties implements ProjectProperties {
       }
     }
     return false;
+  }
+
+  @Override
+  public JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
+      throws JibPluginExtensionException {
+    Iterator<JibMavenPluginExtension> services =
+        ServiceLoader.load(JibMavenPluginExtension.class).iterator();
+    if (!services.hasNext()) {
+      log(LogEvent.debug("no plugin extension found."));
+      return jibContainerBuilder;
+    }
+
+    MavenLogAdapter logAdapter = new MavenLogAdapter(this::log);
+    ContainerBuildPlan buildPlan = jibContainerBuilder.toContainerBuildPlan();
+    JibMavenPluginExtension extension = services.next();
+    try {
+      for (; services.hasNext(); extension = services.next()) {
+        buildPlan = extension.extendContainerBuildPlan(buildPlan, project, session, logAdapter);
+        ImageReference.parse(buildPlan.getBaseImage()); // to validate image reference
+      }
+      return jibContainerBuilder.applyContainerBuildPlan(buildPlan);
+
+    } catch (InvalidImageReferenceException ex) {
+      throw new JibPluginExtensionException(
+          extension.getClass(), "invalid base image reference: " + buildPlan.getBaseImage(), ex);
+    }
   }
 }
