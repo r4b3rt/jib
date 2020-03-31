@@ -43,6 +43,7 @@ import com.google.cloud.tools.jib.plugins.common.logging.SingleThreadedExecutor;
 import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Verify;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -535,15 +536,17 @@ public class MavenProjectProperties implements ProjectProperties {
     Iterator<JibMavenPluginExtension> services =
         ServiceLoader.load(JibMavenPluginExtension.class).iterator();
     if (!services.hasNext()) {
-      log(LogEvent.debug("no plugin extension found."));
+      log(LogEvent.debug("No Jib plugin extension discovered"));
       return jibContainerBuilder;
     }
 
-    MavenLogAdapter logAdapter = new MavenLogAdapter(this::log);
+    JibMavenPluginExtension extension = null;
     ContainerBuildPlan buildPlan = jibContainerBuilder.toContainerBuildPlan();
-    JibMavenPluginExtension extension = services.next();
+    MavenLogAdapter logAdapter = new MavenLogAdapter(this::log);
     try {
-      for (; services.hasNext(); extension = services.next()) {
+      while (services.hasNext()) {
+        extension = services.next();
+        log(LogEvent.lifecycle("Running extension: " + extension.getClass().getName()));
         buildPlan = extension.extendContainerBuildPlan(buildPlan, project, session, logAdapter);
         ImageReference.parse(buildPlan.getBaseImage()); // to validate image reference
       }
@@ -551,7 +554,9 @@ public class MavenProjectProperties implements ProjectProperties {
 
     } catch (InvalidImageReferenceException ex) {
       throw new JibPluginExtensionException(
-          extension.getClass(), "invalid base image reference: " + buildPlan.getBaseImage(), ex);
+          Verify.verifyNotNull(extension).getClass(),
+          "invalid base image reference: " + buildPlan.getBaseImage(),
+          ex);
     }
   }
 }
