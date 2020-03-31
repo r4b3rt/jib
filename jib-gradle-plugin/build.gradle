@@ -17,6 +17,7 @@ dependencies {
 
   sourceProject project(':jib-build-plan')
   sourceProject project(':jib-plugins-extension-common')
+  sourceProject project(':jib-gradle-plugin-extension-api')
   ensureNoProjectDependencies()
 
   testImplementation "junit:junit:${dependencyVersions.JUNIT}"
