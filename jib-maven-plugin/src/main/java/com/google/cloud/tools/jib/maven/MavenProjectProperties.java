@@ -542,12 +542,12 @@ public class MavenProjectProperties implements ProjectProperties {
 
     JibMavenPluginExtension extension = null;
     ContainerBuildPlan buildPlan = jibContainerBuilder.toContainerBuildPlan();
-    MavenLogAdapter logAdapter = new MavenLogAdapter(this::log);
+    MavenExtensionLogger logger = new MavenExtensionLogger(this::log);
     try {
       while (services.hasNext()) {
         extension = services.next();
         log(LogEvent.lifecycle("Running extension: " + extension.getClass().getName()));
-        buildPlan = extension.extendContainerBuildPlan(buildPlan, project, session, logAdapter);
+        buildPlan = extension.extendContainerBuildPlan(buildPlan, project, session, logger);
         ImageReference.parse(buildPlan.getBaseImage()); // to validate image reference
       }
       return jibContainerBuilder.applyContainerBuildPlan(buildPlan);
