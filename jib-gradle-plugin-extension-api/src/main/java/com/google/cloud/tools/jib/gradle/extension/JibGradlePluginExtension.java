@@ -23,9 +23,9 @@ import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import org.gradle.api.Project;
 
 /**
- * Jib Gradle plugin extension API. If a class implementing the interface is visible on the classpath
- * of the Jib Gradle plugin, the Jib plugin extension framework calls the interface method of the
- * class.
+ * Jib Gradle plugin extension API. If a class implementing the interface is visible on the
+ * classpath of the Jib Gradle plugin, the Jib plugin extension framework calls the interface method
+ * of the class.
  */
 public interface JibGradlePluginExtension extends JibPluginExtension {
 
@@ -39,8 +39,6 @@ public interface JibGradlePluginExtension extends JibPluginExtension {
    * @throws JibPluginExtensionException if an error occurs while running the plugin extension
    */
   ContainerBuildPlan extendContainerBuildPlan(
-      ContainerBuildPlan buildPlan,
-      Project project,
-      ExtensionLogger logger)
+      ContainerBuildPlan buildPlan, Project project, ExtensionLogger logger)
       throws JibPluginExtensionException;
 }
