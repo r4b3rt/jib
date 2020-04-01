@@ -53,7 +53,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Function;
@@ -192,7 +191,6 @@ public class GradleProjectPropertiesTest {
   @Mock private Convention mockConvention;
   @Mock private TaskContainer mockTaskContainer;
   @Mock private Logger mockLogger;
-  @Mock private ServiceLoader<JibGradlePluginExtension> mockServiceLoader;
   @Mock private JavaPluginConvention mockJavaPluginConvention;
   @Mock private SourceSetContainer mockSourceSetContainer;
   @Mock private SourceSet mockMainSourceSet;
@@ -605,11 +603,9 @@ public class GradleProjectPropertiesTest {
   @Test
   public void testRunPluginExtensions_noExtensionsFound()
       throws JibPluginExtensionException, InvalidImageReferenceException {
-    Mockito.when(mockServiceLoader.iterator()).thenReturn(Collections.emptyIterator());
-
     JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
     JibContainerBuilder extendedBuilder =
-        gradleProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+        gradleProjectProperties.runPluginExtensions(Collections.emptyIterator(), originalBuilder);
     Assert.assertSame(extendedBuilder, originalBuilder);
 
     gradleProjectProperties.waitForLoggingThread();
@@ -624,19 +620,19 @@ public class GradleProjectPropertiesTest {
           logger.log(LogLevel.ERROR, "awesome error from my extension");
           return buildPlan.toBuilder().setUser("user from extension").build();
         };
-    Mockito.when(mockServiceLoader.iterator()).thenReturn(Arrays.asList(extension).iterator());
 
     JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
     JibContainerBuilder extendedBuilder =
-        gradleProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+        gradleProjectProperties.runPluginExtensions(
+            Arrays.asList(extension).iterator(), originalBuilder);
     Assert.assertEquals("user from extension", extendedBuilder.toContainerBuildPlan().getUser());
 
     gradleProjectProperties.waitForLoggingThread();
     Mockito.verify(mockLogger).error("awesome error from my extension");
     Mockito.verify(mockLogger)
-        .info(
+        .lifecycle(
             Mockito.startsWith(
-                "Running extension: com.google.cloud.tools.jib.maven.MavenProjectProperties"));
+                "Running extension: com.google.cloud.tools.jib.gradle.GradleProjectProperties"));
   }
 
   private BuildContext setupBuildContext(String appRoot)
