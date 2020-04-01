@@ -533,8 +533,15 @@ public class MavenProjectProperties implements ProjectProperties {
   @Override
   public JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
       throws JibPluginExtensionException {
-    Iterator<JibMavenPluginExtension> services =
-        ServiceLoader.load(JibMavenPluginExtension.class).iterator();
+    return runPluginExtensions(
+        ServiceLoader.load(JibMavenPluginExtension.class), jibContainerBuilder);
+  }
+
+  @VisibleForTesting
+  JibContainerBuilder runPluginExtensions(
+      ServiceLoader<JibMavenPluginExtension> serviceLoader, JibContainerBuilder jibContainerBuilder)
+      throws JibPluginExtensionException {
+    Iterator<JibMavenPluginExtension> services = serviceLoader.iterator();
     if (!services.hasNext()) {
       log(LogEvent.debug("No Jib plugin extension discovered"));
       return jibContainerBuilder;

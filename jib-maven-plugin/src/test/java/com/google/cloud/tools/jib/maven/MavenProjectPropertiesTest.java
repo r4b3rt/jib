@@ -21,6 +21,7 @@ import com.google.cloud.tools.jib.api.Containerizer;
 import com.google.cloud.tools.jib.api.InvalidImageReferenceException;
 import com.google.cloud.tools.jib.api.JavaContainerBuilder;
 import com.google.cloud.tools.jib.api.JavaContainerBuilder.LayerType;
+import com.google.cloud.tools.jib.api.Jib;
 import com.google.cloud.tools.jib.api.JibContainerBuilder;
 import com.google.cloud.tools.jib.api.JibContainerBuilderTestHelper;
 import com.google.cloud.tools.jib.api.RegistryImage;
@@ -30,7 +31,10 @@ import com.google.cloud.tools.jib.api.buildplan.FileEntry;
 import com.google.cloud.tools.jib.configuration.BuildContext;
 import com.google.cloud.tools.jib.filesystem.DirectoryWalker;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
+import com.google.cloud.tools.jib.maven.extension.JibMavenPluginExtension;
 import com.google.cloud.tools.jib.plugins.common.ContainerizingMode;
+import com.google.cloud.tools.jib.plugins.extension.ExtensionLogger.LogLevel;
+import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.ByteStreams;
@@ -49,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Function;
@@ -239,6 +244,7 @@ public class MavenProjectPropertiesTest {
   @Mock private PluginExecution mockPluginExecution;
   @Mock private Log mockLog;
   @Mock private TempDirectoryProvider mockTempDirectoryProvider;
+  @Mock private ServiceLoader<JibMavenPluginExtension> mockServiceLoader;
 
   private MavenProjectProperties mavenProjectProperties;
 
@@ -674,13 +680,7 @@ public class MavenProjectPropertiesTest {
             newArtifact("com.test", "projectC", "3.0"));
 
     Map<LayerType, List<Path>> classifyDependencies =
-        new MavenProjectProperties(
-                mockJibPluginDescriptor,
-                mockMavenProject,
-                mockMavenSession,
-                mockLog,
-                mockTempDirectoryProvider)
-            .classifyDependencies(artifacts, projectArtifacts);
+        mavenProjectProperties.classifyDependencies(artifacts, projectArtifacts);
 
     Assert.assertEquals(
         classifyDependencies.get(LayerType.DEPENDENCIES),
@@ -1008,6 +1008,43 @@ public class MavenProjectPropertiesTest {
         Paths.get("/foo/bar/helloworld-1.war"), mavenProjectProperties.getWarArtifact());
   }
 
+  @Test
+  public void testRunPluginExtensions_noExtensionsFound()
+      throws JibPluginExtensionException, InvalidImageReferenceException {
+    Mockito.when(mockServiceLoader.iterator()).thenReturn(Collections.emptyIterator());
+
+    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
+    JibContainerBuilder extendedBuilder =
+        mavenProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+    Assert.assertSame(extendedBuilder, originalBuilder);
+
+    mavenProjectProperties.waitForLoggingThread();
+    Mockito.verify(mockLog).debug("No Jib plugin extension discovered");
+  }
+
+  @Test
+  public void testRunPluginExtensions()
+      throws JibPluginExtensionException, InvalidImageReferenceException {
+    JibMavenPluginExtension extension =
+        (buildPlan, project, session, logger) -> {
+          logger.log(LogLevel.ERROR, "awesome error from my extension");
+          return buildPlan.toBuilder().setUser("user from extension").build();
+        };
+    Mockito.when(mockServiceLoader.iterator()).thenReturn(Arrays.asList(extension).iterator());
+
+    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
+    JibContainerBuilder extendedBuilder =
+        mavenProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+    Assert.assertEquals("user from extension", extendedBuilder.toContainerBuildPlan().getUser());
+
+    mavenProjectProperties.waitForLoggingThread();
+    Mockito.verify(mockLog).error("awesome error from my extension");
+    Mockito.verify(mockLog)
+        .info(
+            Mockito.startsWith(
+                "Running extension: com.google.cloud.tools.jib.maven.MavenProjectProperties"));
+  }
+
   private BuildContext setUpBuildContext(String appRoot, ContainerizingMode containerizingMode)
       throws InvalidImageReferenceException, IOException, CacheDirectoryCreationException {
     JavaContainerBuilder javaContainerBuilder =
@@ -1015,13 +1052,7 @@ public class MavenProjectPropertiesTest {
             .setAppRoot(AbsoluteUnixPath.get(appRoot))
             .setModificationTimeProvider((ignored1, ignored2) -> SAMPLE_FILE_MODIFICATION_TIME);
     JibContainerBuilder jibContainerBuilder =
-        new MavenProjectProperties(
-                mockJibPluginDescriptor,
-                mockMavenProject,
-                mockMavenSession,
-                mockLog,
-                mockTempDirectoryProvider)
-            .createJibContainerBuilder(javaContainerBuilder, containerizingMode);
+        mavenProjectProperties.createJibContainerBuilder(javaContainerBuilder, containerizingMode);
     return JibContainerBuilderTestHelper.toBuildContext(
         jibContainerBuilder, Containerizer.to(RegistryImage.named("to")));
   }
