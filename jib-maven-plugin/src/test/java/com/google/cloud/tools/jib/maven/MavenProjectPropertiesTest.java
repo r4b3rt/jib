@@ -40,6 +40,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Resources;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
@@ -70,6 +71,7 @@ import org.apache.maven.project.MavenProject;
 import org.codehaus.plexus.archiver.zip.ZipEntry;
 import org.codehaus.plexus.archiver.zip.ZipOutputStream;
 import org.codehaus.plexus.util.xml.Xpp3Dom;
+import org.hamcrest.CoreMatchers;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -1027,10 +1029,9 @@ public class MavenProjectPropertiesTest {
           return buildPlan.toBuilder().setUser("user from extension").build();
         };
 
-    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
     JibContainerBuilder extendedBuilder =
         mavenProjectProperties.runPluginExtensions(
-            Arrays.asList(extension).iterator(), originalBuilder);
+            Arrays.asList(extension).iterator(), Jib.from(RegistryImage.named("from/nothing")));
     Assert.assertEquals("user from extension", extendedBuilder.toContainerBuildPlan().getUser());
 
     mavenProjectProperties.waitForLoggingThread();
@@ -1039,6 +1040,46 @@ public class MavenProjectPropertiesTest {
         .info(
             Mockito.startsWith(
                 "Running extension: com.google.cloud.tools.jib.maven.MavenProjectProperties"));
+  }
+
+  @Test
+  public void testRunPluginExtensions_exceptionFromExtension()
+      throws InvalidImageReferenceException {
+    FileNotFoundException fakeException = new FileNotFoundException();
+    JibMavenPluginExtension extension =
+        (buildPlan, project, session, logger) -> {
+          throw new JibPluginExtensionException(
+              JibMavenPluginExtension.class, "exception from extension", fakeException);
+        };
+
+    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("scratch"));
+    try {
+      mavenProjectProperties.runPluginExtensions(
+          Arrays.asList(extension).iterator(), originalBuilder);
+      Assert.fail();
+    } catch (JibPluginExtensionException ex) {
+      Assert.assertEquals("exception from extension", ex.getMessage());
+      Assert.assertSame(fakeException, ex.getCause());
+    }
+  }
+
+  @Test
+  public void testRunPluginExtensions_invalidBaseImageFromExtension()
+      throws InvalidImageReferenceException {
+    JibMavenPluginExtension extension =
+        (buildPlan, project, session, logger) ->
+            buildPlan.toBuilder().setBaseImage(" in*val+id").build();
+
+    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
+    try {
+      mavenProjectProperties.runPluginExtensions(
+          Arrays.asList(extension).iterator(), originalBuilder);
+      Assert.fail();
+    } catch (JibPluginExtensionException ex) {
+      Assert.assertEquals("invalid base image reference:  in*val+id", ex.getMessage());
+      Assert.assertThat(
+          ex.getCause(), CoreMatchers.instanceOf(InvalidImageReferenceException.class));
+    }
   }
 
   private BuildContext setUpBuildContext(String appRoot, ContainerizingMode containerizingMode)
