@@ -21,6 +21,7 @@ import com.google.cloud.tools.jib.api.Containerizer;
 import com.google.cloud.tools.jib.api.InvalidImageReferenceException;
 import com.google.cloud.tools.jib.api.JavaContainerBuilder;
 import com.google.cloud.tools.jib.api.JavaContainerBuilder.LayerType;
+import com.google.cloud.tools.jib.api.Jib;
 import com.google.cloud.tools.jib.api.JibContainerBuilder;
 import com.google.cloud.tools.jib.api.JibContainerBuilderTestHelper;
 import com.google.cloud.tools.jib.api.RegistryImage;
@@ -30,7 +31,10 @@ import com.google.cloud.tools.jib.api.buildplan.FileEntry;
 import com.google.cloud.tools.jib.configuration.BuildContext;
 import com.google.cloud.tools.jib.filesystem.DirectoryWalker;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
+import com.google.cloud.tools.jib.maven.extension.JibMavenPluginExtension;
 import com.google.cloud.tools.jib.plugins.common.ContainerizingMode;
+import com.google.cloud.tools.jib.plugins.extension.ExtensionLogger.LogLevel;
+import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.ByteStreams;
@@ -49,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Function;
@@ -239,11 +244,13 @@ public class MavenProjectPropertiesTest {
   @Mock private PluginExecution mockPluginExecution;
   @Mock private Log mockLog;
   @Mock private TempDirectoryProvider mockTempDirectoryProvider;
+  @Mock private ServiceLoader<JibMavenPluginExtension> mockServiceLoader;
 
+  private JibContainerBuilder jibContainerBuilder;
   private MavenProjectProperties mavenProjectProperties;
 
   @Before
-  public void setUp() throws IOException, URISyntaxException {
+  public void setUp() throws IOException, URISyntaxException, InvalidImageReferenceException {
     Mockito.when(mockLog.isDebugEnabled()).thenReturn(true);
     Mockito.when(mockLog.isWarnEnabled()).thenReturn(true);
     Mockito.when(mockLog.isErrorEnabled()).thenReturn(true);
@@ -281,6 +288,8 @@ public class MavenProjectPropertiesTest {
     Files.createDirectories(emptyDirectory);
 
     Mockito.when(mockMavenProject.getProperties()).thenReturn(mockMavenProperties);
+
+    jibContainerBuilder = Jib.from(RegistryImage.named("from/nothing"));
   }
 
   @Test
@@ -1006,6 +1015,35 @@ public class MavenProjectPropertiesTest {
 
     Assert.assertEquals(
         Paths.get("/foo/bar/helloworld-1.war"), mavenProjectProperties.getWarArtifact());
+  }
+
+  @Test
+  public void testRunPluginExtensions_noExtensionsFound() throws JibPluginExtensionException {
+    Mockito.when(mockServiceLoader.iterator()).thenReturn(Collections.emptyIterator());
+    Assert.assertSame(
+        jibContainerBuilder,
+        mavenProjectProperties.runPluginExtensions(mockServiceLoader, jibContainerBuilder));
+    Mockito.verify(mockLog).debug("No Jib plugin extension discovered");
+  }
+
+  @Test
+  public void testRunPluginExtensions() throws JibPluginExtensionException {
+    JibMavenPluginExtension extension =
+        (buildPlan, project, session, logger) -> {
+          logger.log(LogLevel.ERROR, "awesome error from my extension");
+          return buildPlan.toBuilder().setUser("user from extension").build();
+        };
+    Mockito.when(mockServiceLoader.iterator()).thenReturn(Arrays.asList(extension).iterator());
+
+    JibContainerBuilder containerBuilder =
+        mavenProjectProperties.runPluginExtensions(mockServiceLoader, jibContainerBuilder);
+    Assert.assertEquals("user from extension", containerBuilder.toContainerBuildPlan().getUser());
+
+    Mockito.verify(mockLog).error("awesome error from my extension");
+    Mockito.verify(mockLog)
+        .info(
+            Mockito.startsWith(
+                "Running extension: com.google.cloud.tools.jib.maven.MavenProjectProperties"));
   }
 
   private BuildContext setUpBuildContext(String appRoot, ContainerizingMode containerizingMode)
