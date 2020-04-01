@@ -53,7 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Function;
@@ -244,7 +243,6 @@ public class MavenProjectPropertiesTest {
   @Mock private PluginExecution mockPluginExecution;
   @Mock private Log mockLog;
   @Mock private TempDirectoryProvider mockTempDirectoryProvider;
-  @Mock private ServiceLoader<JibMavenPluginExtension> mockServiceLoader;
 
   private MavenProjectProperties mavenProjectProperties;
 
@@ -1011,11 +1009,9 @@ public class MavenProjectPropertiesTest {
   @Test
   public void testRunPluginExtensions_noExtensionsFound()
       throws JibPluginExtensionException, InvalidImageReferenceException {
-    Mockito.when(mockServiceLoader.iterator()).thenReturn(Collections.emptyIterator());
-
     JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
     JibContainerBuilder extendedBuilder =
-        mavenProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+        mavenProjectProperties.runPluginExtensions(Collections.emptyIterator(), originalBuilder);
     Assert.assertSame(extendedBuilder, originalBuilder);
 
     mavenProjectProperties.waitForLoggingThread();
@@ -1030,11 +1026,11 @@ public class MavenProjectPropertiesTest {
           logger.log(LogLevel.ERROR, "awesome error from my extension");
           return buildPlan.toBuilder().setUser("user from extension").build();
         };
-    Mockito.when(mockServiceLoader.iterator()).thenReturn(Arrays.asList(extension).iterator());
 
     JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
     JibContainerBuilder extendedBuilder =
-        mavenProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+        mavenProjectProperties.runPluginExtensions(
+            Arrays.asList(extension).iterator(), originalBuilder);
     Assert.assertEquals("user from extension", extendedBuilder.toContainerBuildPlan().getUser());
 
     mavenProjectProperties.waitForLoggingThread();
