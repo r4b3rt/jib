@@ -246,11 +246,10 @@ public class MavenProjectPropertiesTest {
   @Mock private TempDirectoryProvider mockTempDirectoryProvider;
   @Mock private ServiceLoader<JibMavenPluginExtension> mockServiceLoader;
 
-  private JibContainerBuilder jibContainerBuilder;
   private MavenProjectProperties mavenProjectProperties;
 
   @Before
-  public void setUp() throws IOException, URISyntaxException, InvalidImageReferenceException {
+  public void setUp() throws IOException, URISyntaxException {
     Mockito.when(mockLog.isDebugEnabled()).thenReturn(true);
     Mockito.when(mockLog.isWarnEnabled()).thenReturn(true);
     Mockito.when(mockLog.isErrorEnabled()).thenReturn(true);
@@ -288,8 +287,6 @@ public class MavenProjectPropertiesTest {
     Files.createDirectories(emptyDirectory);
 
     Mockito.when(mockMavenProject.getProperties()).thenReturn(mockMavenProperties);
-
-    jibContainerBuilder = Jib.from(RegistryImage.named("from/nothing"));
   }
 
   @Test
@@ -683,13 +680,7 @@ public class MavenProjectPropertiesTest {
             newArtifact("com.test", "projectC", "3.0"));
 
     Map<LayerType, List<Path>> classifyDependencies =
-        new MavenProjectProperties(
-                mockJibPluginDescriptor,
-                mockMavenProject,
-                mockMavenSession,
-                mockLog,
-                mockTempDirectoryProvider)
-            .classifyDependencies(artifacts, projectArtifacts);
+        mavenProjectProperties.classifyDependencies(artifacts, projectArtifacts);
 
     Assert.assertEquals(
         classifyDependencies.get(LayerType.DEPENDENCIES),
@@ -1018,16 +1009,22 @@ public class MavenProjectPropertiesTest {
   }
 
   @Test
-  public void testRunPluginExtensions_noExtensionsFound() throws JibPluginExtensionException {
+  public void testRunPluginExtensions_noExtensionsFound()
+      throws JibPluginExtensionException, InvalidImageReferenceException {
     Mockito.when(mockServiceLoader.iterator()).thenReturn(Collections.emptyIterator());
-    Assert.assertSame(
-        jibContainerBuilder,
-        mavenProjectProperties.runPluginExtensions(mockServiceLoader, jibContainerBuilder));
+
+    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
+    JibContainerBuilder extendedBuilder =
+        mavenProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+    Assert.assertSame(extendedBuilder, originalBuilder);
+
+    mavenProjectProperties.waitForLoggingThread();
     Mockito.verify(mockLog).debug("No Jib plugin extension discovered");
   }
 
   @Test
-  public void testRunPluginExtensions() throws JibPluginExtensionException {
+  public void testRunPluginExtensions()
+      throws JibPluginExtensionException, InvalidImageReferenceException {
     JibMavenPluginExtension extension =
         (buildPlan, project, session, logger) -> {
           logger.log(LogLevel.ERROR, "awesome error from my extension");
@@ -1035,10 +1032,12 @@ public class MavenProjectPropertiesTest {
         };
     Mockito.when(mockServiceLoader.iterator()).thenReturn(Arrays.asList(extension).iterator());
 
-    JibContainerBuilder containerBuilder =
-        mavenProjectProperties.runPluginExtensions(mockServiceLoader, jibContainerBuilder);
-    Assert.assertEquals("user from extension", containerBuilder.toContainerBuildPlan().getUser());
+    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
+    JibContainerBuilder extendedBuilder =
+        mavenProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+    Assert.assertEquals("user from extension", extendedBuilder.toContainerBuildPlan().getUser());
 
+    mavenProjectProperties.waitForLoggingThread();
     Mockito.verify(mockLog).error("awesome error from my extension");
     Mockito.verify(mockLog)
         .info(
@@ -1053,13 +1052,7 @@ public class MavenProjectPropertiesTest {
             .setAppRoot(AbsoluteUnixPath.get(appRoot))
             .setModificationTimeProvider((ignored1, ignored2) -> SAMPLE_FILE_MODIFICATION_TIME);
     JibContainerBuilder jibContainerBuilder =
-        new MavenProjectProperties(
-                mockJibPluginDescriptor,
-                mockMavenProject,
-                mockMavenSession,
-                mockLog,
-                mockTempDirectoryProvider)
-            .createJibContainerBuilder(javaContainerBuilder, containerizingMode);
+        mavenProjectProperties.createJibContainerBuilder(javaContainerBuilder, containerizingMode);
     return JibContainerBuilderTestHelper.toBuildContext(
         jibContainerBuilder, Containerizer.to(RegistryImage.named("to")));
   }
