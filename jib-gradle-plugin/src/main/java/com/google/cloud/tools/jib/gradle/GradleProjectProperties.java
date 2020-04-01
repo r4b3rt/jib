@@ -398,6 +398,15 @@ public class GradleProjectProperties implements ProjectProperties {
   @Override
   public JibContainerBuilder runPluginExtensions(JibContainerBuilder jibContainerBuilder)
       throws JibPluginExtensionException {
+    return runPluginExtensions(
+        ServiceLoader.load(JibGradlePluginExtension.class), jibContainerBuilder);
+  }
+
+  @VisibleForTesting
+  JibContainerBuilder runPluginExtensions(
+      ServiceLoader<JibGradlePluginExtension> serviceLoader,
+      JibContainerBuilder jibContainerBuilder)
+      throws JibPluginExtensionException {
     Iterator<JibGradlePluginExtension> services =
         ServiceLoader.load(JibGradlePluginExtension.class).iterator();
     if (!services.hasNext()) {

@@ -21,6 +21,7 @@ import com.google.cloud.tools.jib.api.Containerizer;
 import com.google.cloud.tools.jib.api.InvalidImageReferenceException;
 import com.google.cloud.tools.jib.api.JavaContainerBuilder;
 import com.google.cloud.tools.jib.api.JavaContainerBuilder.LayerType;
+import com.google.cloud.tools.jib.api.Jib;
 import com.google.cloud.tools.jib.api.JibContainerBuilder;
 import com.google.cloud.tools.jib.api.JibContainerBuilderTestHelper;
 import com.google.cloud.tools.jib.api.RegistryImage;
@@ -31,7 +32,10 @@ import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
 import com.google.cloud.tools.jib.configuration.BuildContext;
 import com.google.cloud.tools.jib.filesystem.DirectoryWalker;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
+import com.google.cloud.tools.jib.gradle.extension.JibGradlePluginExtension;
 import com.google.cloud.tools.jib.plugins.common.ContainerizingMode;
+import com.google.cloud.tools.jib.plugins.extension.ExtensionLogger.LogLevel;
+import com.google.cloud.tools.jib.plugins.extension.JibPluginExtensionException;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -49,6 +53,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.function.Function;
@@ -187,6 +192,7 @@ public class GradleProjectPropertiesTest {
   @Mock private Convention mockConvention;
   @Mock private TaskContainer mockTaskContainer;
   @Mock private Logger mockLogger;
+  @Mock private ServiceLoader<JibGradlePluginExtension> mockServiceLoader;
   @Mock private JavaPluginConvention mockJavaPluginConvention;
   @Mock private SourceSetContainer mockSourceSetContainer;
   @Mock private SourceSet mockMainSourceSet;
@@ -594,6 +600,43 @@ public class GradleProjectPropertiesTest {
         .thenReturn("war.war");
 
     Assert.assertEquals("war.war", gradleProjectProperties.getWarFilePath());
+  }
+
+  @Test
+  public void testRunPluginExtensions_noExtensionsFound()
+      throws JibPluginExtensionException, InvalidImageReferenceException {
+    Mockito.when(mockServiceLoader.iterator()).thenReturn(Collections.emptyIterator());
+
+    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
+    JibContainerBuilder extendedBuilder =
+        gradleProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+    Assert.assertSame(extendedBuilder, originalBuilder);
+
+    gradleProjectProperties.waitForLoggingThread();
+    Mockito.verify(mockLogger).debug("No Jib plugin extension discovered");
+  }
+
+  @Test
+  public void testRunPluginExtensions()
+      throws JibPluginExtensionException, InvalidImageReferenceException {
+    JibGradlePluginExtension extension =
+        (buildPlan, project, logger) -> {
+          logger.log(LogLevel.ERROR, "awesome error from my extension");
+          return buildPlan.toBuilder().setUser("user from extension").build();
+        };
+    Mockito.when(mockServiceLoader.iterator()).thenReturn(Arrays.asList(extension).iterator());
+
+    JibContainerBuilder originalBuilder = Jib.from(RegistryImage.named("from/nothing"));
+    JibContainerBuilder extendedBuilder =
+        gradleProjectProperties.runPluginExtensions(mockServiceLoader, originalBuilder);
+    Assert.assertEquals("user from extension", extendedBuilder.toContainerBuildPlan().getUser());
+
+    gradleProjectProperties.waitForLoggingThread();
+    Mockito.verify(mockLogger).error("awesome error from my extension");
+    Mockito.verify(mockLogger)
+        .info(
+            Mockito.startsWith(
+                "Running extension: com.google.cloud.tools.jib.maven.MavenProjectProperties"));
   }
 
   private BuildContext setupBuildContext(String appRoot)
