@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v2.3.4
 
       - name: Build project
         run: |
@@ -44,7 +44,7 @@ jobs:
           sha256sum jib-${{ github.event.inputs.release_version }}.zip > zip.sha256
 
       - name: Create pull request
-        uses: repo-sync/pull-request@v2
+        uses: repo-sync/pull-request@v2.6
         id: create-pr
         with:
           # Use a personal token to file a PR as a non-bot author to trigger other workflows (e.g., unit tests):
@@ -56,7 +56,7 @@ jobs:
           pr_label: "PR: Merge After Release"
 
       - name: Draft GitHub release
-        uses: actions/create-release@v1
+        uses: actions/create-release@v1.1.4
         id: create-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -70,32 +70,33 @@ jobs:
             See [CHANGELOG.md](https://github.com/GoogleContainerTools/jib/blob/master/jib-cli/CHANGELOG.md) for more details.
 
       - name: Upload Jib CLI
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
           asset_path: ./jib-cli/build/distributions/jib-${{ github.event.inputs.release_version }}.zip
           asset_name: jib-jre-${{ github.event.inputs.release_version }}.zip
           asset_content_type: application/zip
 
       - name: Upload Jib CLI checksum
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          upload_url: ${{ steps.create-release.outputs.upload_url }}
           asset_path: ./jib-cli/build/distributions/zip.sha256
           asset_name: jib-jre-${{ github.event.inputs.release_version }}.zip.sha256
           asset_content_type: text/plain
 
       - name: Create Jib CLI release checklist issue
-        uses: JasonEtco/create-an-issue@v2
+        uses: JasonEtco/create-an-issue@v2.5.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_NAME: v${{ github.event.inputs.release_version }}-cli
           CHANGELOG_URL: https://github.com/GoogleContainerTools/jib/blob/master/jib-cli/CHANGELOG.md
           README_URL: https://github.com/GoogleContainerTools/jib/blob/master/jib-cli/README.md
+          GCS_UPDATE_SCRIPT: "`./jib-cli/scripts/update_gcs_latest.sh ${{ github.event.inputs.release_version }}`"
           RELEASE_DRAFT: ${{ steps.create-release.outputs.html_url }}
           RELEASE_PR: ${{steps.create-pr.outputs.pr_url}}
         with:

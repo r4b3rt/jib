@@ -17,6 +17,7 @@
 package com.google.cloud.tools.jib.cli.jar;
 
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
+import com.google.cloud.tools.jib.cli.ArtifactProcessor;
 import com.google.common.collect.ImmutableList;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -24,7 +25,7 @@ import java.util.List;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 
-class StandardPackagedProcessor implements JarProcessor {
+public class StandardPackagedProcessor implements ArtifactProcessor {
 
   private final Path jarPath;
   private final Integer jarJavaVersion;
@@ -35,7 +36,7 @@ class StandardPackagedProcessor implements JarProcessor {
    * @param jarPath path to jar file
    * @param jarJavaVersion jar java version
    */
-  StandardPackagedProcessor(Path jarPath, Integer jarJavaVersion) {
+  public StandardPackagedProcessor(Path jarPath, Integer jarJavaVersion) {
     this.jarPath = jarPath;
     this.jarJavaVersion = jarJavaVersion;
   }
@@ -77,7 +78,7 @@ class StandardPackagedProcessor implements JarProcessor {
   }
 
   @Override
-  public Integer getJarJavaVersion() {
+  public Integer getJavaVersion() {
     return jarJavaVersion;
   }
 }

@@ -35,6 +35,7 @@ import org.gradle.api.tasks.TaskContainer;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.jvm.tasks.Jar;
 import org.gradle.testfixtures.ProjectBuilder;
+import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
 import org.gradle.testkit.runner.UnexpectedBuildFailure;
 import org.junit.After;
@@ -80,12 +81,13 @@ public class JibPluginTest {
         getClass().getClassLoader().getResourceAsStream("gradle/plugin-test/build.gradle");
     Files.copy(buildFileContent, buildFile);
 
-    GradleRunner.create()
-        .withProjectDir(testProjectRoot.getRoot())
-        .withPluginClasspath()
-        .withGradleVersion(JibPlugin.GRADLE_MIN_VERSION.getVersion())
-        .build();
-    // pass
+    BuildResult result =
+        GradleRunner.create()
+            .withProjectDir(testProjectRoot.getRoot())
+            .withPluginClasspath()
+            .withGradleVersion(JibPlugin.GRADLE_MIN_VERSION.getVersion())
+            .build();
+    assertThat(result).isNotNull();
   }
 
   @Test
@@ -356,6 +358,14 @@ public class JibPluginTest {
     assertThat(output)
         .contains(
             "Containerizing application to updated-image, updated-image:updated-tag, updated-image:tag2");
+  }
+
+  @Test
+  public void testLazyEvalForLabels() {
+    BuildResult showLabels = testProject.build("showlabels", "-Djib.console=plain");
+    assertThat(showLabels.getOutput())
+        .contains(
+            "labels contain values [firstkey:updated-first-label, secondKey:updated-second-label]");
   }
 
   private Project createProject(String... plugins) {

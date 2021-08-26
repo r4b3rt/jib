@@ -22,7 +22,6 @@ import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.ModificationTimeProvider;
 import com.google.cloud.tools.jib.api.buildplan.RelativeUnixPath;
 import com.google.cloud.tools.jib.filesystem.DirectoryWalker;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Streams;
@@ -58,14 +57,14 @@ public class JavaContainerBuilder {
   }
 
   /** Represents the different types of layers for a Java application. */
-  @VisibleForTesting
   public enum LayerType {
     DEPENDENCIES("dependencies"),
     SNAPSHOT_DEPENDENCIES("snapshot dependencies"),
     PROJECT_DEPENDENCIES("project dependencies"),
     RESOURCES("resources"),
     CLASSES("classes"),
-    EXTRA_FILES("extra files");
+    EXTRA_FILES("extra files"),
+    JVM_ARG_FILES("jvm arg files");
 
     private final String name;
 
@@ -579,14 +578,15 @@ public class JavaContainerBuilder {
     }
 
     // Detect duplicate filenames across all dependency layer types
-    List<String> duplicates =
+    Map<String, Long> occurrences =
         Streams.concat(
                 addedDependencies.stream(),
                 addedSnapshotDependencies.stream(),
                 addedProjectDependencies.stream())
-            .map(Path::getFileName)
-            .map(Path::toString)
-            .collect(Collectors.groupingBy(filename -> filename, Collectors.counting()))
+            .map(path -> path.getFileName().toString())
+            .collect(Collectors.groupingBy(filename -> filename, Collectors.counting()));
+    List<String> duplicates =
+        occurrences
             .entrySet()
             .stream()
             .filter(entry -> entry.getValue() > 1)
@@ -598,9 +598,11 @@ public class JavaContainerBuilder {
             LayerType.DEPENDENCIES, addedDependencies,
             LayerType.SNAPSHOT_DEPENDENCIES, addedSnapshotDependencies,
             LayerType.PROJECT_DEPENDENCIES, addedProjectDependencies);
-    for (LayerType layerType : layerMap.keySet()) {
-      for (Path file : Preconditions.checkNotNull(layerMap.get(layerType))) {
-        // handle duplicates by appending filesize to the end of the file
+    for (Map.Entry<LayerType, List<Path>> entry : layerMap.entrySet()) {
+      for (Path file : Preconditions.checkNotNull(entry.getValue())) {
+        // Handle duplicates by appending filesize to the end of the file. This renaming logic
+        // must be in sync with the code that does the same in the other place. See
+        // https://github.com/GoogleContainerTools/jib/issues/3331
         String jarName = file.getFileName().toString();
         if (duplicates.contains(jarName)) {
           jarName = jarName.replaceFirst("\\.jar$", "-" + Files.size(file)) + ".jar";
@@ -608,7 +610,7 @@ public class JavaContainerBuilder {
         // Add dependencies to layer configuration
         addFileToLayer(
             layerBuilders,
-            layerType,
+            entry.getKey(),
             file,
             appRoot.resolve(dependenciesDestination).resolve(jarName));
       }

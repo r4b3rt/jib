@@ -14,11 +14,16 @@
  * the License.
  */
 
-package com.google.cloud.tools.jib.cli.jar;
+package com.google.cloud.tools.jib.cli;
 
-import com.google.cloud.tools.jib.cli.CacheDirectories;
-import com.google.cloud.tools.jib.cli.Jar;
-import com.google.common.annotations.VisibleForTesting;
+import com.google.cloud.tools.jib.api.InvalidImageReferenceException;
+import com.google.cloud.tools.jib.api.buildplan.AbsoluteUnixPath;
+import com.google.cloud.tools.jib.cli.jar.ProcessingMode;
+import com.google.cloud.tools.jib.cli.jar.SpringBootExplodedProcessor;
+import com.google.cloud.tools.jib.cli.jar.SpringBootPackagedProcessor;
+import com.google.cloud.tools.jib.cli.jar.StandardExplodedProcessor;
+import com.google.cloud.tools.jib.cli.jar.StandardPackagedProcessor;
+import com.google.cloud.tools.jib.cli.war.StandardWarExplodedProcessor;
 import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
@@ -26,28 +31,40 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
 import java.util.Enumeration;
+import java.util.Optional;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
-/** Class to create a {@link JarProcessor} instance depending on jar type and processing mode. */
-public class JarProcessors {
+/**
+ * Class to create a {@link ArtifactProcessor} instance depending on jar or war type and processing
+ * mode.
+ */
+public class ArtifactProcessors {
   private static String SPRING_BOOT = "spring-boot";
   private static String STANDARD = "standard";
   private static Integer VERSION_NOT_FOUND = 0;
+  private static final String DEFAULT_JETTY_APP_ROOT = "/var/lib/jetty/webapps/ROOT";
+
+  private ArtifactProcessors() {}
 
   /**
-   * Creates a {@link JarProcessor} instance based on jar type and processing mode.
+   * Creates a {@link ArtifactProcessor} instance based on jar type and processing mode.
    *
    * @param jarPath path to the jar
    * @param cacheDirectories the location of the relevant caches
    * @param jarOptions jar cli options
-   * @return JarProcessor
+   * @param commonContainerConfigCliOptions common cli options shared between jar and war command
+   * @return ArtifactProcessor
    * @throws IOException if I/O error occurs when opening the jar file
    */
-  public static JarProcessor from(Path jarPath, CacheDirectories cacheDirectories, Jar jarOptions)
+  public static ArtifactProcessor fromJar(
+      Path jarPath,
+      CacheDirectories cacheDirectories,
+      Jar jarOptions,
+      CommonContainerConfigCliOptions commonContainerConfigCliOptions)
       throws IOException {
     Integer jarJavaVersion = determineJavaMajorVersion(jarPath);
-    if (jarJavaVersion > 11 && !jarOptions.getFrom().isPresent()) {
+    if (jarJavaVersion > 11 && !commonContainerConfigCliOptions.getFrom().isPresent()) {
       throw new IllegalStateException(
           "The input JAR ("
               + jarPath
@@ -55,20 +72,45 @@ public class JarProcessors {
               + jarJavaVersion
               + ", but the default base image only supports versions up to Java 11. Specify a custom base image with --from.");
     }
-
     String jarType = determineJarType(jarPath);
     ProcessingMode mode = jarOptions.getMode();
     if (jarType.equals(SPRING_BOOT) && mode.equals(ProcessingMode.packaged)) {
       return new SpringBootPackagedProcessor(jarPath, jarJavaVersion);
     } else if (jarType.equals(SPRING_BOOT) && mode.equals(ProcessingMode.exploded)) {
       return new SpringBootExplodedProcessor(
-          jarPath, cacheDirectories.getExplodedJarDirectory(), jarJavaVersion);
+          jarPath, cacheDirectories.getExplodedArtifactDirectory(), jarJavaVersion);
     } else if (jarType.equals(STANDARD) && mode.equals(ProcessingMode.packaged)) {
       return new StandardPackagedProcessor(jarPath, jarJavaVersion);
     } else {
       return new StandardExplodedProcessor(
-          jarPath, cacheDirectories.getExplodedJarDirectory(), jarJavaVersion);
+          jarPath, cacheDirectories.getExplodedArtifactDirectory(), jarJavaVersion);
     }
+  }
+
+  /**
+   * Creates a {@link ArtifactProcessor} instance.
+   *
+   * @param warPath path to the war
+   * @param cacheDirectories the location of the relevant caches
+   * @param warOptions war cli options
+   * @param commonContainerConfigCliOptions common cli options shared between jar and war command
+   * @return ArtifactProcessor
+   * @throws InvalidImageReferenceException if base image reference is invalid
+   */
+  public static ArtifactProcessor fromWar(
+      Path warPath,
+      CacheDirectories cacheDirectories,
+      War warOptions,
+      CommonContainerConfigCliOptions commonContainerConfigCliOptions)
+      throws InvalidImageReferenceException {
+    Optional<AbsoluteUnixPath> appRoot = warOptions.getAppRoot();
+    if (!commonContainerConfigCliOptions.isJettyBaseimage() && !appRoot.isPresent()) {
+      throw new IllegalArgumentException(
+          "Please set the app root of the container with `--app-root` when specifying a base image that is not jetty.");
+    }
+    AbsoluteUnixPath chosenAppRoot = appRoot.orElse(AbsoluteUnixPath.get(DEFAULT_JETTY_APP_ROOT));
+    return new StandardWarExplodedProcessor(
+        warPath, cacheDirectories.getExplodedArtifactDirectory(), chosenAppRoot);
   }
 
   /**
@@ -95,8 +137,7 @@ public class JarProcessors {
    * @return java version
    * @throws IOException if I/O exception thrown when opening the jar file
    */
-  @VisibleForTesting
-  static Integer determineJavaMajorVersion(Path jarPath) throws IOException {
+  public static Integer determineJavaMajorVersion(Path jarPath) throws IOException {
     try (JarFile jarFile = new JarFile(jarPath.toFile())) {
       Enumeration<JarEntry> jarEntries = jarFile.entries();
       while (jarEntries.hasMoreElements()) {
@@ -107,7 +148,7 @@ public class JarProcessors {
                   new DataInputStream(loader.getResourceAsStream(jarEntry))) {
 
             // Check magic number
-            if (classFile == null || classFile.readInt() != 0xCAFEBABE) {
+            if (classFile.readInt() != 0xCAFEBABE) {
               throw new IllegalArgumentException(
                   "The class file (" + jarEntry + ") is of an invalid format.");
             }

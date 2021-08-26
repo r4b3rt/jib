@@ -34,6 +34,10 @@ The CLI tool is powered by [Jib Core](https://github.com/GoogleContainerTools/ji
 * [Jar Command](#jar-command)
   * [Quickstart](#quickstart-1)
   * [Options](#options-1)
+* [War Command](#war-command)
+  * [Quickstart](#quickstart-2)
+  * [Options](#options-2)
+* [Options Shared Between Jar and War Commands](#options-shared-between-jar-and-war-commands)
 * [Common Jib CLI Options](#common-jib-cli-options)
   * [Auth/Security](#authsecurity)
   * [Info Params](#info-params)
@@ -41,6 +45,7 @@ The CLI tool is powered by [Jib Core](https://github.com/GoogleContainerTools/ji
 * [Global Jib Configuration](#global-jib-configuration)
 * [References](#references)
   * [Fully Annotated Build File (`jib.yaml`)](#fully-annotated-build-file-jibyaml)
+* [Privacy](#privacy)
 
 ## Get the Jib CLI
 
@@ -50,7 +55,7 @@ Most users should download a ZIP archive (Java application). We are working on r
 
 A JRE is required to run this Jib CLI distribution.
 
-Find the [latest jib-cli 0.5.0 release](https://github.com/GoogleContainerTools/jib/releases/tag/v0.5.0-cli) on the [Releases page](https://github.com/GoogleContainerTools/jib/releases), download `jib-jre-<version>.zip`, and unzip it. The zip file contains the `jib` (`jib.bat` for Windows) script at `jib/bin/`. Optionally, add the binary directory to your `$PATH` so that you can call `jib` from anywhere.
+Find the [latest jib-cli 0.7.0 release](https://github.com/GoogleContainerTools/jib/releases/tag/v0.7.0-cli) on the [Releases page](https://github.com/GoogleContainerTools/jib/releases), download `jib-jre-<version>.zip`, and unzip it. The zip file contains the `jib` (`jib.bat` for Windows) script at `jib/bin/`. Optionally, add the binary directory to your `$PATH` so that you can call `jib` from anywhere.
 
 ### Windows: Install with `choco`
 
@@ -157,15 +162,42 @@ Optional flags for the `jar` command:
 
 Option | Description
 ---       | ---
+`--jvm-flags`     | JVM arguments, example: `--jvm-flags=-Dmy.property=value,-Xshare:off`
+`--mode`          | The jar processing mode, candidates: exploded, packaged, default: exploded
+
+## War Command
+This command follows the following pattern:
+```
+ $ jib war --target <image-name> path/to/myapp.war 
+```
+## Quickstart
+1. Have your sample WAR ready and use the `war` command to containerize your WAR. By default, the WAR command uses [`jetty`](https://hub.docker.com/_/jetty) as the base image so the entrypoint is set to `java -jar /usr/local/jetty/start.jar`:
+    ```
+     $ jib war --target=docker://cli-war-quickstart <your-sample>.war
+    ```
+2.  Run the image and open your browser at http://localhost:8080
+    ```
+     $ docker run -p 8080:8080 cli-war-quickstart
+    ```
+## Options
+Flags for the `war` command:
+
+Option | Description
+---       | ---
+`--app-root` | The app root on the container. Customizing the app-root is helpful if you are using a different Servlet engine base image (for example, Tomcat)
+
+## Options Shared Between the Jar and War Commands
+Here are a few container configurations that can be customized when using the `jar` and `war` commands.
+
+Option | Description
+---       | ---
 `--creation-time` | The creation time of the container in milliseconds since epoch or iso8601 format. Overrides the default (1970-01-01T00:00:00Z)
 `--entrypoint`    | Entrypoint for container. Overrides the default entrypoint, example: `--entrypoint='custom entrypoint'`
 `--environment-variables`  | Environment variables to write into container, example: `--environment-variables env1=env_value1, env2=env_value2`.
 `--expose`        | Ports to expose on container, example: `--expose=5000,7/udp`.
 `--from`          | The base image to use.
 `--image-format`  | Format of container, candidates: Docker, OCI, default: Docker.
-`--jvm-flags`     | JVM arguments, example: `--jvm-flags=-Dmy.property=value,-Xshare:off`
 `--labels`        | Labels to write into container metadata, example: `--labels=label1=value1,label2=value2`.
-`--mode`          | The jar processing mode, candidates: exploded, packaged, default: exploded
 `--program-args`  | Program arguments for container entrypoint.
 `-u, --user`      | The user to run the container as, example: `--user=myuser:mygroup`.
 `--volumes`       | Directories on container to hold extra volumes, example: `--volumes=/var/log,/var/log2`.
@@ -258,6 +290,7 @@ Some options can be set in the global Jib configuration file. The file is at the
   ]
 }
 ```
+**Note about `mirror.gcr.io`**: it is _not_ a Docker Hub mirror but a cache. It caches [frequently-accessed public Docker Hub images](https://cloud.google.com/container-registry/docs/pulling-cached-images), and it's often possible that your base image does not exist in `mirror.gcr.io`. In that case, Jib will have to fall back to use Docker Hub.
 
 ## References
 
@@ -400,3 +433,6 @@ Parameters that will be overwritten:
 - `workingDirectory`
 - `entrypoint`
 - `cmd`
+
+## Privacy
+See the [Privacy page](https://github.com/GoogleContainerTools/jib/blob/master/docs/privacy.md).

@@ -18,7 +18,6 @@ package com.google.cloud.tools.jib.cli.buildfile;
 
 import com.google.cloud.tools.jib.api.buildplan.FileEntriesLayer;
 import com.google.cloud.tools.jib.api.buildplan.FilePermissions;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -28,7 +27,6 @@ import java.util.List;
  * A class that keeps track of permissions for various stacking file permissions settings in {@link
  * LayerSpec}.
  */
-@VisibleForTesting
 class FilePropertiesStack {
 
   // TODO perhaps use a fixed size list here
@@ -65,7 +63,7 @@ class FilePropertiesStack {
 
   /** Remove the last layer from the stack. All values are recalculated. */
   public void pop() {
-    Preconditions.checkState(stack.size() > 0, "Error in file properties stack pop, popping at 0");
+    Preconditions.checkState(!stack.isEmpty(), "Error in file properties stack pop, popping at 0");
     stack.remove(stack.size() - 1);
     updateProperties();
   }

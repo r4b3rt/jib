@@ -16,6 +16,8 @@
 
 package com.google.cloud.tools.jib.http;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.cloud.tools.jib.api.LogEvent;
 import com.google.common.io.ByteStreams;
 import java.io.IOException;
@@ -67,7 +69,8 @@ public class WithServerFailoverHttpClientTest {
   @Test
   public void testSecureConnectionOnInsecureHttpsServer()
       throws IOException, InterruptedException, GeneralSecurityException, URISyntaxException {
-    FailoverHttpClient secureHttpClient = new FailoverHttpClient(false /*secure*/, false, logger);
+    FailoverHttpClient secureHttpClient =
+        new FailoverHttpClient(false /*secure*/, false, logger, false);
     try (TestWebServer server = new TestWebServer(true);
         Response ignored = secureHttpClient.get(new URL(server.getEndpoint()), request)) {
       Assert.fail("Should fail if cannot verify peer");
@@ -162,8 +165,12 @@ public class WithServerFailoverHttpClientTest {
       ignored1.close();
       ignored2.close();
     } finally {
+
+      // Validate that calling shutdown() many times completes with no errors
+      assertThat(httpClient.getTransportsCreated()).hasSize(2);
       httpClient.shutDown();
-      httpClient.shutDown(); // test should complete with no error
+      httpClient.shutDown();
+      assertThat(httpClient.getTransportsCreated()).hasSize(0);
     }
   }
 

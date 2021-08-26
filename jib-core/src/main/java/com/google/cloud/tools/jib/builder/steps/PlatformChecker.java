@@ -22,10 +22,14 @@ import com.google.cloud.tools.jib.configuration.BuildContext;
 import com.google.cloud.tools.jib.event.EventHandlers;
 import com.google.cloud.tools.jib.image.json.ContainerConfigurationTemplate;
 import com.google.common.base.Verify;
+import java.nio.file.Path;
+import java.util.Optional;
 import java.util.Set;
 
 /** Provides helper methods to check platforms. */
 public class PlatformChecker {
+
+  private PlatformChecker() {}
 
   /**
    * Assuming the base image is not a manifest list, checks and warns misconfigured platforms.
@@ -36,10 +40,10 @@ public class PlatformChecker {
   static void checkManifestPlatform(
       BuildContext buildContext, ContainerConfigurationTemplate containerConfig) {
     EventHandlers eventHandlers = buildContext.getEventHandlers();
+    Optional<Path> path = buildContext.getBaseImageConfiguration().getTarPath();
     String baseImageName =
-        buildContext.getBaseImageConfiguration().getTarPath().isPresent()
-            ? buildContext.getBaseImageConfiguration().getTarPath().get().toString()
-            : buildContext.getBaseImageConfiguration().getImage().toString();
+        path.map(Path::toString)
+            .orElse(buildContext.getBaseImageConfiguration().getImage().toString());
 
     Set<Platform> platforms = buildContext.getContainerConfiguration().getPlatforms();
     Verify.verify(!platforms.isEmpty());

@@ -30,4 +30,12 @@ public interface Blob {
    * @throws IOException if writing the BLOB fails
    */
   BlobDescriptor writeTo(OutputStream outputStream) throws IOException;
+
+  /**
+   * Whether {@link #writeTo(OutputStream)} is retryable.
+   *
+   * @return {@code true} if {@link #writeTo(OutputStream)} can be called multiple times. {@code
+   *     false} otherwise.
+   */
+  boolean isRetryable();
 }

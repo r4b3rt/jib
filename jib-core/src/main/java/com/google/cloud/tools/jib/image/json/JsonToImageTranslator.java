@@ -37,6 +37,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
@@ -80,9 +81,10 @@ public class JsonToImageTranslator {
       imageBuilder.addLayer(new DigestOnlyLayer(digest));
     }
 
-    if (manifestTemplate.getContainerConfiguration().isPresent()) {
-      configureBuilderWithContainerConfiguration(
-          imageBuilder, manifestTemplate.getContainerConfiguration().get());
+    Optional<ContainerConfigurationTemplate> configuration =
+        manifestTemplate.getContainerConfiguration();
+    if (configuration.isPresent()) {
+      configureBuilderWithContainerConfiguration(imageBuilder, configuration.get());
     }
     return imageBuilder.build();
   }
@@ -225,13 +227,13 @@ public class JsonToImageTranslator {
    * @return a set of {@link Port}s
    */
   @VisibleForTesting
-  static ImmutableSet<Port> portMapToSet(@Nullable Map<String, Map<?, ?>> portMap)
+  static ImmutableSet<Port> portMapToSet(@Nullable Map<String, Map<String, String>> portMap)
       throws BadContainerConfigurationFormatException {
     if (portMap == null) {
       return ImmutableSet.of();
     }
     ImmutableSet.Builder<Port> ports = new ImmutableSet.Builder<>();
-    for (Map.Entry<String, Map<?, ?>> entry : portMap.entrySet()) {
+    for (Map.Entry<String, Map<String, String>> entry : portMap.entrySet()) {
       String port = entry.getKey();
       Matcher matcher = PORT_PATTERN.matcher(port);
       if (!matcher.matches()) {
@@ -247,14 +249,15 @@ public class JsonToImageTranslator {
   }
 
   /**
-   * Converts a map of volumes strings to a set of {@link AbsoluteUnixPath}s (e.g. {@code {@code
-   * {"/var/log/my-app-logs":{}}} -> AbsoluteUnixPath().get("/var/log/my-app-logs")}).
+   * Converts a map of volumes strings to a set of {@link AbsoluteUnixPath}s (e.g. {@code
+   * {"/var/log/my-app-logs":{}}} -> {@code AbsoluteUnixPath().get("/var/log/my-app-logs")}).
    *
    * @param volumeMap the map to convert
    * @return a set of {@link AbsoluteUnixPath}s
    */
   @VisibleForTesting
-  static ImmutableSet<AbsoluteUnixPath> volumeMapToSet(@Nullable Map<String, Map<?, ?>> volumeMap)
+  static ImmutableSet<AbsoluteUnixPath> volumeMapToSet(
+      @Nullable Map<String, Map<String, String>> volumeMap)
       throws BadContainerConfigurationFormatException {
     if (volumeMap == null) {
       return ImmutableSet.of();

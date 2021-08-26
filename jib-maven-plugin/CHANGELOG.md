@@ -7,9 +7,49 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Timestamps of file entries in a tarball built with `jib:buildTar` are set to the epoch, making the tarball reproducible. ([#3158](https://github.com/GoogleContainerTools/jib/issues/3158))
+### Fixed
+
+## 3.1.4
+
+### Changed
+
+- Downgraded Google HTTP libraries to 1.34.0 to resolve network issues. ([#3415](https://github.com/GoogleContainerTools/jib/pull/3415), [#3058](https://github.com/GoogleContainerTools/jib/issues/3058), [#3409](https://github.com/GoogleContainerTools/jib/issues/3409))
+- If `allowInsecureRegistries=true`, HTTP requests are retried on I/O errors only after insecure failover is finalized for each server. ([#3422](https://github.com/GoogleContainerTools/jib/issues/3422))
+
+## 3.1.3
+
+### Added
+
+- Increased robustness in registry communications by retrying HTTP requests (to the effect of retrying image pushes or pulls) on I/O exceptions with exponential backoffs. ([#3351](https://github.com/GoogleContainerTools/jib/pull/3351))
+- Now also supports `username` and `password` properties for the `auths` section in a Docker config (`~/.docker/config.json`). (Previously, only supported was a base64-encoded username and password string of the `auth` property.) ([#3365](https://github.com/GoogleContainerTools/jib/pull/3365))
+
+### Changed
+
+- Upgraded Google HTTP libraries to 1.39.2. ([#3387](https://github.com/GoogleContainerTools/jib/pull/3387))
+
+## 3.1.2
 
 ### Fixed
+
+- Fixed the bug introduced in 3.1 that constructs a wrong Java runtime classpath when two dependencies have the same artifact ID and version but different group IDs. The bug occurs only when using Java 9+ or setting `<container><expandClasspathDependencies>`. ([#3331](https://github.com/GoogleContainerTools/jib/pull/3331))
+
+## 3.1.1
+
+### Fixed
+
+- Fixed the regression introduced in 3.1.0 where a build may fail due to an error from main class inference even if `<container><entrypoint>` is configured. ([#3295](https://github.com/GoogleContainerTools/jib/pull/3295))
+
+## 3.1.0
+
+### Added
+
+- For Google Artifact Registry (`*-docker.pkg.dev`), Jib now tries [Google Application Default Credentials](https://developers.google.com/identity/protocols/application-default-credentials) last like it has been doing for `gcr.io`. ([#3241](https://github.com/GoogleContainerTools/jib/pull/3241))
+
+### Changed
+
+- Jib now creates an additional layer that contains two small text files: [`/app/jib-classpath-file` and `/app/jib-main-class-file`](https://github.com/GoogleContainerTools/jib/tree/master/jib-maven-plugin/README.md#custom-container-entrypoint). They hold, respectively, the final Java runtime classpath and the main class computed by Jib that are suitable for app execution on JVM. For example, with Java 9+, setting the container entrypoint to `java --class-path @/app/jib-classpath-file @/app/jib-main-class-file` will work to start the app. (This is basically the default entrypoint set by Jib when the entrypoint is not explicitly configured by the user.) The files are always generated whether Java 8 or 9+, or whether `jib.container.entrypoint` is explicitly configured. The files can be helpful especially when setting a custom entrypoint for a shell script that needs to get the classpath and the main class computed by Jib, or for [AppCDS](https://github.com/GoogleContainerTools/jib/issues/2471). ([#3280](https://github.com/GoogleContainerTools/jib/pull/3280))
+- For Java 9+ apps, the default Java runtime classpath explicitly lists all the app dependencies, preserving the dependency loading order declared by Maven. This is done by changing the default entrypoint to use the new classpath JVM argument file (basically `java -cp @/app/jib-classpath-file`). As such, `<container><expandClasspathDependencies>` takes no effect for Java 9+. ([#3280](https://github.com/GoogleContainerTools/jib/pull/3280))
+- Timestamps of file entries in a tarball built with `jib:buildTar` are set to the epoch, making the tarball reproducible. ([#3158](https://github.com/GoogleContainerTools/jib/issues/3158))
 
 ## 3.0.0
 

@@ -34,6 +34,7 @@ For information about the project, see the [Jib project README](../README.md).
   * [Authentication Methods](#authentication-methods)
     * [Using Docker Credential Helpers](#using-docker-credential-helpers)
     * [Using Specific Credentials](#using-specific-credentials)
+  * [Custom Container Entrypoint](#custom-container-entrypoint)
   * [Jib Extensions](#jib-extensions)
   * [WAR Projects](#war-projects)
   * [Skaffold Integration](#skaffold-integration)
@@ -50,7 +51,7 @@ In your Gradle Java project, add the plugin to your `build.gradle`:
 
 ```groovy
 plugins {
-  id 'com.google.cloud.tools.jib' version '3.0.0'
+  id 'com.google.cloud.tools.jib' version '3.1.4'
 }
 ```
 
@@ -104,6 +105,16 @@ For example, to build the image `my-docker-id/my-app`, the configuration would b
 
 ```groovy
 jib.to.image = 'my-docker-id/my-app'
+```
+
+#### Using [JFrog Container Registry (JCR)](https://www.jfrog.com/confluence/display/JFROG/JFrog+Container+Registry/) or [JFrog Artifactory](https://www.jfrog.com/confluence/display/JFROG/Getting+Started+with+Artifactory+as+a+Docker+Registry)...
+
+*Make sure you have a [docker-credential-helper](https://github.com/docker/docker-credential-helpers#available-programs) set up. For example, on macOS, the credential helper would be `docker-credential-osxkeychain`. See [Authentication Methods](#authentication-methods) for other ways of authenticating.*
+
+For example, to build the image `my-company-docker-local.jfrog.io/my-app`, the configuration would be:
+
+```groovy
+jib.to.image = 'my-company-docker-local.jfrog.io/my-app'
 ```
 
 #### Using [Azure Container Registry (ACR)](https://azure.microsoft.com/en-us/services/container-registry/)...
@@ -239,7 +250,7 @@ Property | Type | Default | Description
 `entrypoint` | `List<String>` | *None* | The command to start the container with (similar to Docker's [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) instruction). If set, then `jvmFlags`, `mainClass`, `extraClasspath`, and `expandClasspathDependencies` are ignored. You may also set `jib.container.entrypoint = 'INHERIT'` to indicate that the `entrypoint` and `args` should be inherited from the base image.\*
 `environment` | `Map<String, String>` | *None* | Key-value pairs for setting environment variables on the container (similar to Docker's [ENV](https://docs.docker.com/engine/reference/builder/#env) instruction).
 `extraClasspath` | `List<String>` | *None* | Additional paths in the container to prepend to the computed Java classpath.
-`expandClasspathDependencies` | `boolean` | `false` | When set to true, does not use a wildcard (for example, `/app/lib/*`) for dependency JARs in the default Java runtime classpath but instead enumerates the JARs. Has the effect of preserving the classpath loading order as defined by the Gradle project.
+`expandClasspathDependencies` | `boolean` | `false` | <ul><li>Java 8 *or* Jib < 3.1: When set to true, does not use a wildcard (for example, `/app/lib/*`) for dependency JARs in the default Java runtime classpath but instead enumerates the JARs. Has the effect of preserving the classpath loading order as defined by the Gradle project.</li><li>Java >= 9 *and* Jib >= 3.1: The option has no effect. Jib *always* enumerates the dependency JARs. This is achieved by [creating and using an argument file](#custom-container-entrypoint) for the `--class-path` JVM argument.</li></ul>
 `filesModificationTime` | `String` | `EPOCH_PLUS_SECOND` | Sets the modification time (last modified time) of files in the image put by Jib. (Note that this does not set the image creation time, which can be set using `jib.container.creationTime`.) The value should either be `EPOCH_PLUS_SECOND` to set the timestamps to Epoch + 1 second (default behavior), or an ISO 8601 date-time parsable with [`DateTimeFormatter.ISO_DATE_TIME`](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/time/format/DateTimeFormatter.html#ISO_DATE_TIME) such as `2019-07-15T10:15:30+09:00` or `2011-12-03T22:42:05Z`.
 `format` | `String` | `Docker` | Use `OCI` to build an [OCI container image](https://www.opencontainers.org/).
 `jvmFlags` | `List<String>` | *None* | Additional flags to pass into the JVM when running your application.
@@ -343,6 +354,7 @@ Some options can be set in the global Jib configuration file. The file is at the
   ]
 }
 ```
+**Note about `mirror.gcr.io`**: it is _not_ a Docker Hub mirror but a cache. It caches [frequently-accessed public Docker Hub images](https://cloud.google.com/container-registry/docs/pulling-cached-images), and it's often possible that your base image does not exist in `mirror.gcr.io`. In that case, Jib will have to fall back to use Docker Hub.
 
 ### Example
 
@@ -515,6 +527,21 @@ jib {
   }
 }
 ```
+
+
+### Custom Container Entrypoint
+
+If you don't set `jib.container.entrypoint`, the default container entrypoint to launch your app will be basically `java -cp <runtime classpath> <app main class>`. (The final `java` command can be further configured by setting `jib.container.{jvmFlags|args|extraClasspath|mainClass|expandClasspathDependencies}`.)
+
+Sometimes, you'll want to set a custom entrypoint to use a shell to wrap the `java` command. For example, to let `sh` or `bash` [expand environment variables](https://stackoverflow.com/a/59361658/1701388), or to have more sophisticated logic to construct a launch command. (Note, however, that running a command with a shell forks a new child process unless you run it with `exec` like `sh -c "exec java ..."`. Whether to run the JVM process as PID 1 or a child process of a PID-1 shell is a [decision you should make carefully](https://github.com/GoogleContainerTools/distroless/issues/550#issuecomment-791610603).) In this scenario, you will want to have a way inside a shell script to reliably know the default runtime classpath and the main class that Jib would use by default. To help this, Jib >= 3.1 creates two JVM argument files under `/app` (the default app root) inside the built image.
+
+- `/app/jib-classpath-file`: runtime classpath that Jib would use for default app launch
+- `/app/jib-main-class-file`: main class
+
+Therefore, *for example*, the following commands will be able to launch your app:
+
+- (Java 9+) `java -cp @/app/jib-classpath-file @/app/jib-main-class-file`
+- (with shell) `java -cp $( cat /app/jib-classpath-file ) $( cat /app/jib-main-class-file )`
 
 
 ### Jib Extensions

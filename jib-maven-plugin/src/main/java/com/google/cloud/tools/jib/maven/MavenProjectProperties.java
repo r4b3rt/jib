@@ -314,11 +314,11 @@ public class MavenProjectProperties implements ProjectProperties {
     } catch (IOException ex) {
       throw new IOException(
           "Obtaining project build output files failed; make sure you have "
-              + (containerizingMode == ContainerizingMode.PACKAGED ? "packaged" : "compiled")
+              + (isPackageErrorMessage(containerizingMode) ? "packaged" : "compiled")
               + " your project "
               + "before trying to build the image. (Did you accidentally run \"mvn clean "
               + "jib:build\" instead of \"mvn clean "
-              + (containerizingMode == ContainerizingMode.PACKAGED ? "package" : "compile")
+              + (isPackageErrorMessage(containerizingMode) ? "package" : "compile")
               + " jib:build\"?)",
           ex);
     }
@@ -647,14 +647,15 @@ public class MavenProjectProperties implements ProjectProperties {
       ContainerBuildPlan buildPlan)
       throws JibPluginExtensionException {
     Optional<T> extraConfig = Optional.empty();
-    if (config.getExtraConfiguration().isPresent()) {
+    Optional<Object> configs = config.getExtraConfiguration();
+    if (configs.isPresent()) {
       if (!extraConfigType.isPresent()) {
         throw new IllegalArgumentException(
             "extension "
                 + extension.getClass().getSimpleName()
-                + " does not expect extension-specific configruation; remove the inapplicable "
+                + " does not expect extension-specific configuration; remove the inapplicable "
                 + "<pluginExtension><configuration> from pom.xml");
-      } else if (!extraConfigType.get().isInstance(config.getExtraConfiguration().get())) {
+      } else if (!extraConfigType.get().isInstance(configs.get())) {
         throw new JibPluginExtensionException(
             extension.getClass(),
             "extension-specific <configuration> for "
@@ -662,15 +663,15 @@ public class MavenProjectProperties implements ProjectProperties {
                 + " is not of type "
                 + extraConfigType.get().getName()
                 + " but "
-                + config.getExtraConfiguration().get().getClass().getName()
+                + configs.get().getClass().getName()
                 + "; specify the correct type with <pluginExtension><configuration "
                 + "implementation=\""
                 + extraConfigType.get().getName()
                 + "\">");
       } else {
-        // config.getExtraConfiguration() is of type Optional, so this cast always succeeds
+        // configs is of type Optional, so this cast always succeeds
         // without the isInstance() check above. (Note generic <T> is erased at runtime.)
-        extraConfig = (Optional<T>) config.getExtraConfiguration();
+        extraConfig = (Optional<T>) configs;
       }
     }
 
@@ -702,5 +703,9 @@ public class MavenProjectProperties implements ProjectProperties {
               + config.getExtensionClass());
     }
     return found.get();
+  }
+
+  private boolean isPackageErrorMessage(ContainerizingMode containerizingMode) {
+    return containerizingMode == ContainerizingMode.PACKAGED || isWarProject();
   }
 }

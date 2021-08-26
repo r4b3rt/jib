@@ -231,24 +231,11 @@ class PullBaseImageStep implements Callable<ImagesAndRegistryClient> {
         eventHandlers.dispatch(LogEvent.info("trying mirror " + mirror + " for the base image"));
         try (ProgressEventDispatcher progressDispatcher2 =
             progressDispatcher1.newChildProducer().create("trying mirror " + mirror, 2)) {
-          // First, try with no credentials. This works with public GCR images.
           RegistryClient registryClient =
               buildContext.newBaseImageRegistryClientFactory(mirror).newRegistryClient();
-          try {
-            List<Image> images =
-                pullBaseImages(registryClient, progressDispatcher2.newChildProducer());
-            eventHandlers.dispatch(LogEvent.info("pulled manifest from mirror " + mirror));
-            return Optional.of(new ImagesAndRegistryClient(images, registryClient));
-
-          } catch (RegistryUnauthorizedException ex) {
-            // in case if a mirror requires bearer auth
-            eventHandlers.dispatch(LogEvent.debug("mirror " + mirror + " requires auth"));
-            registryClient.doPullBearerAuth();
-            List<Image> images =
-                pullBaseImages(registryClient, progressDispatcher2.newChildProducer());
-            eventHandlers.dispatch(LogEvent.info("pulled manifest from mirror " + mirror));
-            return Optional.of(new ImagesAndRegistryClient(images, registryClient));
-          }
+          List<Image> images = pullPublicImages(eventHandlers, registryClient, progressDispatcher2);
+          eventHandlers.dispatch(LogEvent.info("pulled manifest from mirror " + mirror));
+          return Optional.of(new ImagesAndRegistryClient(images, registryClient));
 
         } catch (IOException | RegistryException ex) {
           // Ignore errors from this mirror and continue.
@@ -258,6 +245,23 @@ class PullBaseImageStep implements Callable<ImagesAndRegistryClient> {
         }
       }
       return Optional.empty();
+    }
+  }
+
+  private List<Image> pullPublicImages(
+      EventHandlers eventHandlers,
+      RegistryClient registryClient,
+      ProgressEventDispatcher progressDispatcher)
+      throws IOException, RegistryException, LayerCountMismatchException,
+          BadContainerConfigurationFormatException {
+    try {
+      // First, try with no credentials. This works with public GCR images.
+      return pullBaseImages(registryClient, progressDispatcher.newChildProducer());
+
+    } catch (RegistryUnauthorizedException ex) {
+      // in case if a registry requires bearer auth
+      registryClient.doPullBearerAuth();
+      return pullBaseImages(registryClient, progressDispatcher.newChildProducer());
     }
   }
 
@@ -320,7 +324,7 @@ class PullBaseImageStep implements Callable<ImagesAndRegistryClient> {
       Set<Platform> platforms = buildContext.getContainerConfiguration().getPlatforms();
       try (ProgressEventDispatcher progressDispatcher2 =
           childProgressDispatcherFactory.create(
-              "pulling platform-specific manifests and container configs", 2 * platforms.size())) {
+              "pulling platform-specific manifests and container configs", 2L * platforms.size())) {
         // If a manifest list, search for the manifests matching the given platforms.
         for (Platform platform : platforms) {
           String message = "Searching for architecture=%s, os=%s in the base image manifest list";
@@ -366,7 +370,7 @@ class PullBaseImageStep implements Callable<ImagesAndRegistryClient> {
 
     List<String> digests =
         manifestListTemplate.getDigestsForPlatform(platform.getArchitecture(), platform.getOs());
-    if (digests.size() == 0) {
+    if (digests.isEmpty()) {
       String errorTemplate =
           buildContext.getBaseImageConfiguration().getImage()
               + " is a manifest list, but the list does not contain an image for architecture=%s, "

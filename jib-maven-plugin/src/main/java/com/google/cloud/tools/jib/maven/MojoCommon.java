@@ -26,7 +26,6 @@ import com.google.cloud.tools.jib.plugins.common.PropertyNames;
 import com.google.cloud.tools.jib.plugins.common.UpdateChecker;
 import com.google.cloud.tools.jib.plugins.common.VersionChecker;
 import com.google.cloud.tools.jib.plugins.common.globalconfig.GlobalConfig;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Futures;
 import java.nio.file.Paths;
@@ -47,7 +46,6 @@ import org.apache.maven.project.MavenProject;
 /** Collection of common methods to share between Maven goals. */
 public class MojoCommon {
   /** Describes a minimum required version or version range for Jib. */
-  @VisibleForTesting
   public static final String REQUIRED_VERSION_PROPERTY_NAME = "jib.requiredVersion";
 
   public static final String VERSION_URL = "https://storage.googleapis.com/jib-versions/jib-maven";
@@ -76,7 +74,18 @@ public class MojoCommon {
       ProjectProperties projectProperties, Future<Optional<String>> updateCheckFuture) {
     UpdateChecker.finishUpdateCheck(updateCheckFuture)
         .ifPresent(
-            updateMessage -> {
+            latestVersion -> {
+              String updateMessage =
+                  String.format(
+                      "A new version of %s (%s) is available (currently using %s). Update your"
+                          + " build configuration to use the latest features and fixes!",
+                      projectProperties.getToolName(),
+                      latestVersion,
+                      projectProperties.getToolVersion());
+              String privacyUrl = ProjectInfo.GITHUB_URL + "/blob/master/docs/privacy.md";
+              String privacyMessage =
+                  String.format(
+                      "Please see %s for info on disabling this update check.", privacyUrl);
               projectProperties.log(LogEvent.lifecycle(""));
               projectProperties.log(LogEvent.lifecycle("\u001B[33m" + updateMessage + "\u001B[0m"));
               projectProperties.log(
@@ -84,9 +93,8 @@ public class MojoCommon {
                       "\u001B[33m"
                           + ProjectInfo.GITHUB_URL
                           + "/blob/master/jib-maven-plugin/CHANGELOG.md\u001B[0m"));
-              projectProperties.log(
-                  LogEvent.lifecycle(
-                      "Please see https://github.com/GoogleContainerTools/jib/blob/master/docs/privacy.md for info on disabling this update check."));
+              projectProperties.log(LogEvent.lifecycle(""));
+              projectProperties.log(LogEvent.lifecycle(privacyMessage));
               projectProperties.log(LogEvent.lifecycle(""));
             });
   }
@@ -130,12 +138,13 @@ public class MojoCommon {
     // Order is important, so use a LinkedHashMap
     Map<String, FilePermissions> permissionsMap = new LinkedHashMap<>();
     for (PermissionConfiguration permission : permissionList) {
-      if (!permission.getFile().isPresent() || !permission.getMode().isPresent()) {
+      Optional<String> file = permission.getFile();
+      Optional<String> mode = permission.getMode();
+      if (!file.isPresent() || !mode.isPresent()) {
         throw new IllegalArgumentException(
             "Incomplete <permission> configuration; requires <file> and <mode> fields to be set");
       }
-      permissionsMap.put(
-          permission.getFile().get(), FilePermissions.fromOctalString(permission.getMode().get()));
+      permissionsMap.put(file.get(), FilePermissions.fromOctalString(mode.get()));
     }
     return permissionsMap;
   }

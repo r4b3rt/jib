@@ -5,8 +5,6 @@
 ![Build Status](https://storage.googleapis.com/cloud-tools-for-java-kokoro-build-badges/jib-windows-master-orb.svg)
 ![Build Status](https://storage.googleapis.com/cloud-tools-for-java-kokoro-build-badges/jib-macos-master-orb.svg)
 [![Gitter version](https://img.shields.io/gitter/room/gitterHQ/gitter.svg)](https://gitter.im/google/jib)
-[![codecov](https://codecov.io/gh/GoogleContainerTools/jib/branch/master/graph/badge.svg)](https://codecov.io/gh/GoogleContainerTools/jib)
-
 # Jib
 
 <image src="https://github.com/GoogleContainerTools/jib/raw/master/logo/jib-build-docker-java-container-image.png" alt="Jib - Containerize your Java applications." width="650px" />
@@ -77,7 +75,7 @@ We welcome contributions! Here's how you can contribute:
 * Join the [jib-users mailing list](https://groups.google.com/forum/#!forum/jib-users)
 * Contribute:
   * *Read the [contributing guide](https://github.com/GoogleContainerTools/jib/blob/master/CONTRIBUTING.md) before starting work on an issue*
-  * Try to fix [good first issues](https://github.com/GoogleContainerTools/jib/labels/kind%2Fgood%20first%20issue)
+  * Try to fix [good first issues](https://github.com/GoogleContainerTools/jib/labels/good%20first%20issue)
   * Help out on [issues that need help](https://github.com/GoogleContainerTools/jib/labels/kind%2Fquestion)
   * Join in on [discussion issues](https://github.com/GoogleContainerTools/jib/labels/discuss)
 <!--  * Read the [style guide] -->

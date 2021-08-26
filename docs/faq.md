@@ -51,7 +51,8 @@ If a question you have is not answered below, please [submit an issue](/../../is
 
 **Jib CLI**\
 [How does the `jar` command support Standard JARs?](#how-does-the-jar-command-support-standard-jars)\
-[How does the `jar` command support Spring Boot JARs?](#how-does-the-jar-command-support-spring-boot-jars)
+[How does the `jar` command support Spring Boot JARs?](#how-does-the-jar-command-support-spring-boot-jars)\
+[How does the `war` command work?](#how-does-the-war-command-work)
 
 ---
 
@@ -183,7 +184,7 @@ Jib applications are split into the following layers:
 
 ### Which base image (JDK) does Jib use?
 
-[`adoptopenjdk`](https://hub.docker.com/_/adoptopenjdk) and [`jetty`](https://hub.docker.com/_/jetty) (for WAR). See [default_base_image.md] for details.
+[`adoptopenjdk`](https://hub.docker.com/_/adoptopenjdk) and [`jetty`](https://hub.docker.com/_/jetty) (for WAR). See [Default Base Images in Jib](default_base_image.md) for details.
 
 ### Can I learn more about container images?
 
@@ -331,7 +332,7 @@ In Maven, you can use the `maven-resources-plugin` to copy files to your extra d
   ...
   <plugin>
     <artifact>maven-resources-plugin</artifact>
-    <version>3.1.0</version>
+    <version>3.2.0</version>
     <configuration>
       <outputDirectory>${project.basedir}/target/extra-directory/my/files</outputDirectory>
       <resources>
@@ -417,7 +418,10 @@ You can run your container with a javaagent by placing it somewhere in the `src/
 jib.container.jvmFlags = ['-javaagent:/myfolder/agent.jar']
 ```
 
-See also [Can I ADD a custom directory to the image?](#can-i-add-a-custom-directory-to-the-image)
+See also:
+- [Can I ADD a custom directory to the image?](#can-i-add-a-custom-directory-to-the-image)
+- [Javaagent sample](https://github.com/GoogleContainerTools/jib/tree/master/examples/java-agent): dynamically downloads a javaagent during build
+- (Gradle) [javaagent-gradle-plugin](https://github.com/ryandens/javaagent-gradle-plugin#jib-integration): third-party Jib extension
 
 ### How can I tag my image with a timestamp?
 
@@ -830,3 +834,19 @@ Achieved by calling `jib jar --target ${TARGET_REGISTRY} ${JAR_NAME}.jar --mode 
 It will containerize the JAR as is. However, **note** that we highly recommend against using packaged mode for containerizing Spring Boot fat JARs. 
 
 **Entrypoint**: `java -jar ${JAR_NAME}.jar`
+
+### How does the `war` command work?
+The `war` command currently supports containerization of standard WARs. It uses the official [`jetty`](https://hub.docker.com/_/jetty) on Docker Hub as the default base image and explodes out the WAR into `/var/lib/jetty/webapps/ROOT` on the container. It creates the following layers:
+
+* Other Dependencies Layer
+* Snapshot-Dependencies Layer
+* Resources Layer
+* Classes Layer
+
+The default entrypoint when using a jetty base image will be `java -jar /usr/local/jetty/start.jar` unless you choose to specify a custom one.
+
+You can use a different Servlet engine base image with the help of the `--from` option and customize `--app-root`, `--entrypoint` and `--program-args`. If you don't set the `entrypoint` or `program-arguments`, Jib will inherit them from the base image. However, setting the `--app-root` is **required** if you use a non-jetty base image. Here is how the `war` command may look if you're using a Tomcat image:
+```
+ $ jib war --target=<image-reference> myapp.war --from=tomcat:8.5-jre8-alpine --app-root=/usr/local/tomcat/webapps/ROOT
+```
+ 

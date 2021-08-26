@@ -16,6 +16,8 @@
 
 package com.google.cloud.tools.jib.http;
 
+import static com.google.common.truth.Truth.assertThat;
+
 import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpHeaders;
 import com.google.api.client.http.HttpMethods;
@@ -25,15 +27,19 @@ import com.google.api.client.http.HttpResponse;
 import com.google.api.client.http.HttpTransport;
 import com.google.cloud.tools.jib.api.LogEvent;
 import com.google.cloud.tools.jib.blob.Blobs;
+import com.sun.net.httpserver.HttpServer;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.ConnectException;
+import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -416,6 +422,33 @@ public class FailoverHttpClientTest {
         "Cannot verify server at https://url:2. Attempting again with no TLS verification.");
   }
 
+  @Test
+  public void testRetries() throws IOException {
+    HttpServer server = HttpServer.create(new InetSocketAddress(0), 1);
+    AtomicBoolean failed = new AtomicBoolean();
+    server
+        .createContext("/")
+        .setHandler(
+            exchange ->
+                exchange.sendResponseHeaders(failed.compareAndSet(false, true) ? 123 : 200, -1));
+    try {
+      server.start();
+      int port = server.getAddress().getPort();
+      List<LogEvent> events = new ArrayList<>();
+      int returnCode =
+          new FailoverHttpClient(true, true, events::add)
+              .get(new URL("http://localhost:" + port), Request.builder().build())
+              .getStatusCode();
+      assertThat(returnCode).isEqualTo(200);
+      assertThat(failed.get()).isTrue();
+      assertThat(events)
+          .containsExactly(
+              LogEvent.warn("GET http://localhost:" + port + " failed and will be retried"));
+    } finally {
+      server.stop(0);
+    }
+  }
+
   private void setUpMocks(
       HttpTransport mockHttpTransport,
       HttpRequestFactory mockHttpRequestFactory,
@@ -426,6 +459,7 @@ public class FailoverHttpClientTest {
             mockHttpRequestFactory.buildRequest(Mockito.any(), urlCaptor.capture(), Mockito.any()))
         .thenReturn(mockHttpRequest);
 
+    Mockito.when(mockHttpRequest.setIOExceptionHandler(Mockito.any())).thenReturn(mockHttpRequest);
     Mockito.when(mockHttpRequest.setUseRawRedirectUrls(Mockito.anyBoolean()))
         .thenReturn(mockHttpRequest);
     Mockito.when(mockHttpRequest.setHeaders(httpHeadersCaptor.capture()))
@@ -443,7 +477,12 @@ public class FailoverHttpClientTest {
           mockInsecureHttpTransport, mockInsecureHttpRequestFactory, mockInsecureHttpRequest);
     }
     return new FailoverHttpClient(
-        insecure, authOverHttp, logger, () -> mockHttpTransport, () -> mockInsecureHttpTransport);
+        insecure,
+        authOverHttp,
+        logger,
+        () -> mockHttpTransport,
+        () -> mockInsecureHttpTransport,
+        true);
   }
 
   private Request fakeRequest(Integer httpTimeout) {

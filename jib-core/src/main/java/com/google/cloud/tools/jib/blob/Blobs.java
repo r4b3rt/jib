@@ -49,8 +49,8 @@ public class Blobs {
     return new StringBlob(content);
   }
 
-  public static Blob from(WritableContents writable) {
-    return new WritableContentsBlob(writable);
+  public static Blob from(WritableContents writable, boolean retryable) {
+    return new WritableContentsBlob(writable, retryable);
   }
 
   /**

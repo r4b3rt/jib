@@ -17,12 +17,15 @@
 package com.google.cloud.tools.jib.http;
 
 import com.google.api.client.http.GenericUrl;
+import com.google.api.client.http.HttpBackOffIOExceptionHandler;
 import com.google.api.client.http.HttpHeaders;
+import com.google.api.client.http.HttpIOExceptionHandler;
 import com.google.api.client.http.HttpMethods;
 import com.google.api.client.http.HttpRequest;
 import com.google.api.client.http.HttpResponseException;
 import com.google.api.client.http.HttpTransport;
 import com.google.api.client.http.apache.v2.ApacheHttpTransport;
+import com.google.api.client.util.ExponentialBackOff;
 import com.google.api.client.util.SslUtils;
 import com.google.cloud.tools.jib.api.LogEvent;
 import com.google.common.annotations.VisibleForTesting;
@@ -130,6 +133,7 @@ public class FailoverHttpClient {
 
   private final Deque<HttpTransport> transportsCreated = new ArrayDeque<>();
   private final Deque<Response> responsesCreated = new ArrayDeque<>();
+  private final boolean enableRetry;
 
   /**
    * Create a new FailoverHttpclient.
@@ -142,12 +146,22 @@ public class FailoverHttpClient {
       boolean enableHttpAndInsecureFailover,
       boolean sendAuthorizationOverHttp,
       Consumer<LogEvent> logger) {
+    this(enableHttpAndInsecureFailover, sendAuthorizationOverHttp, logger, true);
+  }
+
+  @VisibleForTesting
+  FailoverHttpClient(
+      boolean enableHttpAndInsecureFailover,
+      boolean sendAuthorizationOverHttp,
+      Consumer<LogEvent> logger,
+      boolean enableRetry) {
     this(
         enableHttpAndInsecureFailover,
         sendAuthorizationOverHttp,
         logger,
         FailoverHttpClient::getSecureHttpTransport,
-        FailoverHttpClient::getInsecureHttpTransport);
+        FailoverHttpClient::getInsecureHttpTransport,
+        enableRetry);
   }
 
   @VisibleForTesting
@@ -156,12 +170,14 @@ public class FailoverHttpClient {
       boolean sendAuthorizationOverHttp,
       Consumer<LogEvent> logger,
       Supplier<HttpTransport> secureHttpTransportFactory,
-      Supplier<HttpTransport> insecureHttpTransportFactory) {
+      Supplier<HttpTransport> insecureHttpTransportFactory,
+      boolean enableRetry) {
     this.enableHttpAndInsecureFailover = enableHttpAndInsecureFailover;
     this.sendAuthorizationOverHttp = sendAuthorizationOverHttp;
     this.logger = logger;
     this.secureHttpTransportFactory = secureHttpTransportFactory;
     this.insecureHttpTransportFactory = insecureHttpTransportFactory;
+    this.enableRetry = enableRetry;
   }
 
   /**
@@ -236,7 +252,7 @@ public class FailoverHttpClient {
   public Response call(String httpMethod, URL url, Request request) throws IOException {
     if (!isHttpsProtocol(url)) {
       if (enableHttpAndInsecureFailover) { // HTTP requested. We only care if HTTP is enabled.
-        return call(httpMethod, url, request, getHttpTransport(true));
+        return call(httpMethod, url, request, getHttpTransport(true), true);
       }
       throw new SSLException("insecure HTTP connection not allowed: " + url);
     }
@@ -247,7 +263,7 @@ public class FailoverHttpClient {
     }
 
     try {
-      return call(httpMethod, url, request, getHttpTransport(true));
+      return call(httpMethod, url, request, getHttpTransport(true), !enableHttpAndInsecureFailover);
 
     } catch (SSLException ex) {
       if (!enableHttpAndInsecureFailover) {
@@ -256,13 +272,13 @@ public class FailoverHttpClient {
 
       try {
         logInsecureHttpsFailover(url);
-        Response response = call(httpMethod, url, request, getHttpTransport(false));
+        Response response = call(httpMethod, url, request, getHttpTransport(false), false);
         failoverHistory.put(url.getHost() + ":" + url.getPort(), Failover.INSECURE_HTTPS);
         return response;
 
       } catch (SSLException ignored) { // This is usually when the server is plain-HTTP.
         logHttpFailover(url);
-        Response response = call(httpMethod, toHttp(url), request, getHttpTransport(true));
+        Response response = call(httpMethod, toHttp(url), request, getHttpTransport(true), true);
         failoverHistory.put(url.getHost() + ":" + url.getPort(), Failover.HTTP);
         return response;
       }
@@ -277,7 +293,7 @@ public class FailoverHttpClient {
         // port 443) and we could not connect to 443. It's worth trying port 80.
         if (enableHttpAndInsecureFailover && isHttpsProtocol(url) && url.getPort() == -1) {
           logHttpFailover(url);
-          Response response = call(httpMethod, toHttp(url), request, getHttpTransport(true));
+          Response response = call(httpMethod, toHttp(url), request, getHttpTransport(true), true);
           failoverHistory.put(url.getHost() + ":" + url.getPort(), Failover.HTTP);
           return response;
         }
@@ -291,15 +307,22 @@ public class FailoverHttpClient {
     Preconditions.checkArgument(isHttpsProtocol(url));
     switch (failoverHistory.getOrDefault(url.getHost() + ":" + url.getPort(), Failover.NONE)) {
       case HTTP:
-        return Optional.of(call(httpMethod, toHttp(url), request, getHttpTransport(true)));
+        return Optional.of(call(httpMethod, toHttp(url), request, getHttpTransport(true), true));
       case INSECURE_HTTPS:
-        return Optional.of(call(httpMethod, url, request, getHttpTransport(false)));
+        return Optional.of(call(httpMethod, url, request, getHttpTransport(false), true));
       default:
         return Optional.empty(); // No history found. Should go for normal execution path.
     }
   }
 
-  private Response call(String httpMethod, URL url, Request request, HttpTransport httpTransport)
+  // TODO: remove retryOnIoException and turn on/off retry based on whether it's an SSLException or
+  // not: https://github.com/GoogleContainerTools/jib/issues/3422
+  private Response call(
+      String httpMethod,
+      URL url,
+      Request request,
+      HttpTransport httpTransport,
+      boolean retryOnIoException) // See https://github.com/GoogleContainerTools/jib/issues/3424
       throws IOException {
     boolean clearAuthorization = !isHttpsProtocol(url) && !sendAuthorizationOverHttp;
 
@@ -314,6 +337,9 @@ public class FailoverHttpClient {
             .buildRequest(httpMethod, new GenericUrl(url), request.getHttpContent())
             .setUseRawRedirectUrls(true)
             .setHeaders(requestHeaders);
+    if (enableRetry && retryOnIoException) {
+      httpRequest.setIOExceptionHandler(createBackOffRetryHandler());
+    }
     if (request.getHttpTimeout() != null) {
       httpRequest.setConnectTimeout(request.getHttpTimeout());
       httpRequest.setReadTimeout(request.getHttpTimeout());
@@ -328,6 +354,22 @@ public class FailoverHttpClient {
     } catch (HttpResponseException ex) {
       throw new ResponseException(ex, clearAuthorization);
     }
+  }
+
+  private HttpIOExceptionHandler createBackOffRetryHandler() {
+    return new HttpBackOffIOExceptionHandler(new ExponentialBackOff()) {
+      @Override
+      public boolean handleIOException(HttpRequest request, boolean supportsRetry)
+          throws IOException {
+        String requestUrl = request.getRequestMethod() + " " + request.getUrl();
+        if (super.handleIOException(request, supportsRetry)) {
+          logger.accept(LogEvent.warn(requestUrl + " failed and will be retried"));
+          return true;
+        }
+        logger.accept(LogEvent.warn(requestUrl + " failed and will NOT be retried"));
+        return false;
+      }
+    };
   }
 
   private HttpTransport getHttpTransport(boolean secureTransport) {
@@ -347,5 +389,10 @@ public class FailoverHttpClient {
   private void logInsecureHttpsFailover(URL url) {
     String log = "Cannot verify server at " + url + ". Attempting again with no TLS verification.";
     logger.accept(LogEvent.warn(log));
+  }
+
+  @VisibleForTesting
+  public Deque<HttpTransport> getTransportsCreated() {
+    return transportsCreated;
   }
 }
