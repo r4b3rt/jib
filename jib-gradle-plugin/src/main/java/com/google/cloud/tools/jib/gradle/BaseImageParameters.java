@@ -16,7 +16,10 @@
 
 package com.google.cloud.tools.jib.gradle;
 
+import com.google.cloud.tools.jib.plugins.common.ConfigurationPropertyValidator;
 import com.google.cloud.tools.jib.plugins.common.PropertyNames;
+import java.util.List;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import org.gradle.api.Action;
@@ -32,8 +35,8 @@ import org.gradle.api.tasks.Optional;
 public class BaseImageParameters {
 
   private final AuthParameters auth;
-  private Property<String> image;
-  @Nullable private String credHelper;
+  private final Property<String> image;
+  private final CredHelperParameters credHelper;
   private final PlatformParametersSpec platformParametersSpec;
   private final ListProperty<PlatformParameters> platforms;
 
@@ -43,6 +46,8 @@ public class BaseImageParameters {
     platforms = objectFactory.listProperty(PlatformParameters.class);
     image = objectFactory.property(String.class);
     platformParametersSpec = objectFactory.newInstance(PlatformParametersSpec.class, platforms);
+    credHelper =
+        objectFactory.newInstance(CredHelperParameters.class, PropertyNames.FROM_CRED_HELPER);
 
     PlatformParameters amd64Linux = new PlatformParameters();
     amd64Linux.setArchitecture("amd64");
@@ -53,6 +58,16 @@ public class BaseImageParameters {
   @Nested
   @Optional
   public ListProperty<PlatformParameters> getPlatforms() {
+    String property = System.getProperty(PropertyNames.FROM_PLATFORMS);
+    if (property != null) {
+      List<PlatformParameters> parsed =
+          ConfigurationPropertyValidator.parseListProperty(property).stream()
+              .map(PlatformParameters::of)
+              .collect(Collectors.toList());
+      if (!parsed.equals(platforms.get())) {
+        platforms.set(parsed);
+      }
+    }
     return platforms;
   }
 
@@ -79,18 +94,18 @@ public class BaseImageParameters {
     this.image.set(image);
   }
 
-  @Input
-  @Nullable
+  @Nested
   @Optional
-  public String getCredHelper() {
-    if (System.getProperty(PropertyNames.FROM_CRED_HELPER) != null) {
-      return System.getProperty(PropertyNames.FROM_CRED_HELPER);
-    }
+  public CredHelperParameters getCredHelper() {
     return credHelper;
   }
 
-  public void setCredHelper(String credHelper) {
-    this.credHelper = credHelper;
+  public void setCredHelper(String helper) {
+    this.credHelper.setHelper(helper);
+  }
+
+  public void credHelper(Action<? super CredHelperParameters> action) {
+    action.execute(credHelper);
   }
 
   @Nested

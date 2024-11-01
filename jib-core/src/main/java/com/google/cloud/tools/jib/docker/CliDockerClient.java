@@ -19,6 +19,9 @@ package com.google.cloud.tools.jib.docker;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.cloud.tools.jib.api.DescriptorDigest;
+import com.google.cloud.tools.jib.api.DockerClient;
+import com.google.cloud.tools.jib.api.DockerInfoDetails;
+import com.google.cloud.tools.jib.api.ImageDetails;
 import com.google.cloud.tools.jib.api.ImageReference;
 import com.google.cloud.tools.jib.http.NotifyingOutputStream;
 import com.google.cloud.tools.jib.image.ImageTarball;
@@ -44,17 +47,23 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
 /** Calls out to the {@code docker} CLI. */
-public class DockerClient {
+public class CliDockerClient implements DockerClient {
 
   /**
    * Contains the size, image ID, and diff IDs of an image inspected with {@code docker inspect}.
    */
   @JsonIgnoreProperties(ignoreUnknown = true)
-  public static class DockerImageDetails implements JsonTemplate {
+  public static class DockerImageDetails implements JsonTemplate, ImageDetails {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     private static class RootFsTemplate implements JsonTemplate {
@@ -71,10 +80,12 @@ public class DockerClient {
     @JsonProperty("RootFS")
     private final RootFsTemplate rootFs = new RootFsTemplate();
 
+    @Override
     public long getSize() {
       return size;
     }
 
+    @Override
     public DescriptorDigest getImageId() throws DigestException {
       return DescriptorDigest.fromDigest(imageId);
     }
@@ -85,6 +96,7 @@ public class DockerClient {
      * @return a list of diff ids
      * @throws DigestException if a digest is invalid
      */
+    @Override
     public List<DescriptorDigest> getDiffIds() throws DigestException {
       List<DescriptorDigest> processedDiffIds = new ArrayList<>(rootFs.layers.size());
       for (String diffId : rootFs.layers) {
@@ -98,30 +110,34 @@ public class DockerClient {
   public static final Path DEFAULT_DOCKER_CLIENT = Paths.get("docker");
 
   /**
-   * Checks if Docker is installed on the user's system and accessible by running the default {@code
-   * docker} command.
+   * 10 minute timeout to ensure that Jib doesn't get stuck indefinitely when expecting a docker
+   * output.
+   */
+  public static final Long DOCKER_OUTPUT_TIMEOUT = (long) 10 * 60 * 1000;
+
+  /**
+   * Checks if Docker is installed on the user's system by running the `docker` command.
    *
    * @return {@code true} if Docker is installed on the user's system and accessible
    */
   public static boolean isDefaultDockerInstalled() {
-    return isDockerInstalled(DEFAULT_DOCKER_CLIENT);
+    try {
+      new ProcessBuilder(DEFAULT_DOCKER_CLIENT.toString()).start();
+      return true;
+    } catch (IOException ex) {
+      return false;
+    }
   }
 
   /**
-   * Checks if Docker is installed on the user's system and accessible by running the given {@code
-   * docker} executable.
+   * Checks if Docker is installed on the user's system and by verifying if the executable path
+   * provided has the appropriate permissions.
    *
    * @param dockerExecutable path to the executable to test running
    * @return {@code true} if Docker is installed on the user's system and accessible
    */
   public static boolean isDockerInstalled(Path dockerExecutable) {
-    try {
-      new ProcessBuilder(dockerExecutable.toString()).start();
-      return true;
-
-    } catch (IOException ex) {
-      return false;
-    }
+    return Files.exists(dockerExecutable);
   }
 
   /**
@@ -165,28 +181,41 @@ public class DockerClient {
    * @param dockerExecutable path to {@code docker}
    * @param dockerEnvironment environment variables for {@code docker}
    */
-  public DockerClient(Path dockerExecutable, Map<String, String> dockerEnvironment) {
+  public CliDockerClient(Path dockerExecutable, Map<String, String> dockerEnvironment) {
     this(
         defaultProcessBuilderFactory(
             dockerExecutable.toString(), ImmutableMap.copyOf(dockerEnvironment)));
   }
 
   @VisibleForTesting
-  DockerClient(Function<List<String>, ProcessBuilder> processBuilderFactory) {
+  CliDockerClient(Function<List<String>, ProcessBuilder> processBuilderFactory) {
     this.processBuilderFactory = processBuilderFactory;
   }
 
-  /**
-   * Loads an image tarball into the Docker daemon.
-   *
-   * @see <a
-   *     href="https://docs.docker.com/engine/reference/commandline/load/">https://docs.docker.com/engine/reference/commandline/load</a>
-   * @param imageTarball the built container tarball
-   * @param writtenByteCountListener callback to call when bytes are loaded
-   * @return stdout from {@code docker}
-   * @throws InterruptedException if the 'docker load' process is interrupted
-   * @throws IOException if streaming the blob to 'docker load' fails
-   */
+  @Override
+  public boolean supported(Map<String, String> parameters) {
+    return true;
+  }
+
+  @Override
+  public DockerInfoDetails info() throws IOException, InterruptedException {
+    // Runs 'docker info'.
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    Future<DockerInfoDetails> readerFuture = executor.submit(this::fetchInfoDetails);
+    try {
+      DockerInfoDetails details = readerFuture.get(DOCKER_OUTPUT_TIMEOUT, TimeUnit.MILLISECONDS);
+      return details;
+    } catch (TimeoutException e) {
+      readerFuture.cancel(true); // Interrupt the reader thread
+      throw new IOException("Timeout reached while waiting for 'docker info' output");
+    } catch (ExecutionException e) {
+      throw new IOException("Failed to read output of 'docker info': " + e.getMessage());
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Override
   public String load(ImageTarball imageTarball, Consumer<Long> writtenByteCountListener)
       throws InterruptedException, IOException {
     // Runs 'docker load'.
@@ -224,17 +253,7 @@ public class DockerClient {
     }
   }
 
-  /**
-   * Saves an image tarball from the Docker daemon.
-   *
-   * @see <a
-   *     href="https://docs.docker.com/engine/reference/commandline/save/">https://docs.docker.com/engine/reference/commandline/save</a>
-   * @param imageReference the image to save
-   * @param outputPath the destination path to save the output tarball
-   * @param writtenByteCountListener callback to call when bytes are saved
-   * @throws InterruptedException if the 'docker save' process is interrupted
-   * @throws IOException if creating the tarball fails
-   */
+  @Override
   public void save(
       ImageReference imageReference, Path outputPath, Consumer<Long> writtenByteCountListener)
       throws InterruptedException, IOException {
@@ -253,14 +272,7 @@ public class DockerClient {
     }
   }
 
-  /**
-   * Gets the size, image ID, and diff IDs of an image in the Docker daemon.
-   *
-   * @param imageReference the image to inspect
-   * @return the size, image ID, and diff IDs of the image
-   * @throws IOException if an I/O exception occurs or {@code docker inspect} failed
-   * @throws InterruptedException if the {@code docker inspect} process was interrupted
-   */
+  @Override
   public DockerImageDetails inspect(ImageReference imageReference)
       throws IOException, InterruptedException {
     Process inspectProcess =
@@ -275,5 +287,15 @@ public class DockerClient {
   /** Runs a {@code docker} command. */
   private Process docker(String... subCommand) throws IOException {
     return processBuilderFactory.apply(Arrays.asList(subCommand)).start();
+  }
+
+  private DockerInfoDetails fetchInfoDetails() throws IOException, InterruptedException {
+    Process infoProcess = docker("info", "-f", "{{json .}}");
+    InputStream inputStream = infoProcess.getInputStream();
+    if (infoProcess.waitFor() != 0) {
+      throw new IOException(
+          "'docker info' command failed with error: " + getStderrOutput(infoProcess));
+    }
+    return JsonTemplateMapper.readJson(inputStream, DockerInfoDetails.class);
   }
 }

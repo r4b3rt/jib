@@ -9,6 +9,89 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+## 0.27.2
+- fix: allow pushing images with different arch/os to docker daemon [#4265](https://github.com/GoogleContainerTools/jib/issues/4265)
+- fix: address windows deadlock issue when determining docker environment info [#4267](https://github.com/GoogleContainerTools/jib/issues/4265)
+
+## 0.27.1
+
+### Fixed
+- fix: When building to the local docker daemon with multiple platforms configured, Jib will now automatically select the image that matches the OS type and architecture of the local Docker environment. ([#4249](https://github.com/GoogleContainerTools/jib/pull/4249))
+
+
+## 0.27.0
+
+### Changed
+- deps: bump org.apache.commons:commons-compress from 1.21 to 1.26.0 ([#4204](https://github.com/GoogleContainerTools/jib/pull/4204))
+
+### Fixed
+- fix: set PAX headers to address build reproducibility issue ([#4204](https://github.com/GoogleContainerTools/jib/pull/4204))
+
+## 0.26.0
+
+### Fixed
+- fix: support parsing manifest JSON containing `LayerSources:` from latest Docker. ([#4171](https://github.com/GoogleContainerTools/jib/pull/4171))
+
+## 0.25.0
+
+### Changed
+- deps: bump com.github.luben:zstd-jni from 1.5.5-2 to 1.5.5-4. ([#4049](https://github.com/GoogleContainerTools/jib/pull/4049/))
+- deps: bump com.fasterxml.jackson:jackson-bom from 2.15.0 to 2.15.2. ([#4055](https://github.com/GoogleContainerTools/jib/pull/4055))
+- deps: bump com.google.guava:guava from 32.0.1-jre to 32.1.2-jre ([#4078](https://github.com/GoogleContainerTools/jib/pull/4078))
+- deps: bump org.slf4j:slf4j-simple from 2.0.7 to 2.0.9. ([#4098](https://github.com/GoogleContainerTools/jib/pull/4098))
+
+### Fixed
+- fix: fix WWW-Authenticate header parsing for Basic authentication ([#4035](https://github.com/GoogleContainerTools/jib/pull/4035/))
+
+## 0.24.0
+
+### Changed
+- Replaced deprecated usages of `com.google.api.client.util.Base64` with `java.util.Base64` ([#3872](https://github.com/GoogleContainerTools/jib/pull/3872))
+- Replaced deprecated usages of `ObjectMapper.configure` in jackson ([#3890](https://github.com/GoogleContainerTools/jib/pull/3890))
+
+### Fixed
+- Fixed `V22ManifestListTemplate` cast to allow pulling an OCI index manifest from cache ([#3974](https://github.com/GoogleContainerTools/jib/pull/3974))
+- Specified `CompressorStreamFactory` to decompress compressed layer until EOF in `CacheStorageWriter` ([#3983](https://github.com/GoogleContainerTools/jib/pull/3983))
+- Fixed multithreading issue from `DockerClientResolver.resolve` by not sharing a static `ServiceLoader` instance ([#3993](https://github.com/GoogleContainerTools/jib/pull/3993))
+
+Thanks to our community contributors @Sineaggi, @rquinio, @patrickpichler, @erdi!
+
+## 0.23.0
+
+### Changed
+- Upgraded Google HTTP libraries to 1.42.2 ([#3745](https://github.com/GoogleContainerTools/jib/pull/3745))
+- Re-synchronized jackson dependencies with BOM to use latest versions ([#3768](https://github.com/GoogleContainerTools/jib/pull/3768))
+
+### Fixed
+- Fixed partially cached base image authorization issue by adding check for existence of layers in cache ([#3767](https://github.com/GoogleContainerTools/jib/pull/3767))
+
+## 0.22.0
+
+### Added
+- Better error messaging when environment map in `container.environment` contains null values ([#3672](https://github.com/GoogleContainerTools/jib/pull/3672)).
+- DockerClient interface which is used to make calls to the Docker daemon. This allows for custom implementations to be introduced via SPI ([#3703](https://github.com/GoogleContainerTools/jib/pull/3703)). 
+- Support for OCI image index manifests ([#3715](https://github.com/GoogleContainerTools/jib/pull/3715)).
+- Support for base image layer compressed with zstd ([#3717](https://github.com/GoogleContainerTools/jib/pull/3717))
+
+### Changed
+- Upgraded slf4j-api to 2.0.0 ([#3734](https://github.com/GoogleContainerTools/jib/pull/3734), [#3735](https://github.com/GoogleContainerTools/jib/pull/3735)).
+- Upgraded nullaway to 0.9.9. ([#3720](https://github.com/GoogleContainerTools/jib/pull/3720))
+- Jib now throws an exception when the base image doesn't support target platforms during multi-platform build ([#3707](https://github.com/GoogleContainerTools/jib/pull/3707)).
+- Jib now only checks for file existence instead of running the executable passed into `dockerClient.executable` for the purpose of verifying if docker is installed correctly. Users are responsible for ensuring that the docker executable specified through this property is valid and has the correct permissions ([#3744](https://github.com/GoogleContainerTools/jib/pull/3744)).
+
+Thanks to our community contributors, @oliver-brm, @eddumelendez, @rquinio, @gsquared94!
+
+## 0.21.0
+
+### Added
+- Support for configuration of credential helper with environment variables ([#3575](https://github.com/GoogleContainerTools/jib/pull/3575)).
+- Support architecture suffixes in tags when publishing multi-platform images ([#3523](https://github.com/GoogleContainerTools/jib/pull/3523)).
+
+### Changed
+- Upgraded jackson-databind to 2.13.2.2 ([#3612](https://github.com/GoogleContainerTools/jib/pull/3612)).
+- Added helpful pointers for unsupported class file version exception cause ([#3499](https://github.com/GoogleContainerTools/jib/pull/3499)).
+
+
 ## 0.20.0
 
 ### Added
@@ -20,6 +103,10 @@ All notable changes to this project will be documented in this file.
 - Downgraded Google HTTP libraries to 1.34.0 to resolve network issues. ([#3415](https://github.com/GoogleContainerTools/jib/pull/3415), [#3058](https://github.com/GoogleContainerTools/jib/issues/3058), [#3409](https://github.com/GoogleContainerTools/jib/issues/3409))
 
 ## 0.19.0
+
+### Added
+
+- For Google Artifact Registry (`*-docker.pkg.dev`), Jib now tries [Google Application Default Credentials](https://developers.google.com/identity/protocols/application-default-credentials) last like it has been doing for `gcr.io`. ([#3241](https://github.com/GoogleContainerTools/jib/pull/3241))
 
 ### Changed
 

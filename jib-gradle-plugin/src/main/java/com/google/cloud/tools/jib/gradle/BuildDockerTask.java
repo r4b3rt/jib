@@ -18,9 +18,10 @@ package com.google.cloud.tools.jib.gradle;
 
 import com.google.cloud.tools.jib.api.CacheDirectoryCreationException;
 import com.google.cloud.tools.jib.api.InvalidImageReferenceException;
-import com.google.cloud.tools.jib.docker.DockerClient;
+import com.google.cloud.tools.jib.docker.CliDockerClient;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
 import com.google.cloud.tools.jib.plugins.common.BuildStepsExecutionException;
+import com.google.cloud.tools.jib.plugins.common.ExtraDirectoryNotFoundException;
 import com.google.cloud.tools.jib.plugins.common.HelpfulSuggestions;
 import com.google.cloud.tools.jib.plugins.common.IncompatibleBaseImageJavaVersionException;
 import com.google.cloud.tools.jib.plugins.common.InvalidAppRootException;
@@ -95,8 +96,8 @@ public class BuildDockerTask extends DefaultTask implements JibTask {
     Path dockerExecutable = jibExtension.getDockerClient().getExecutablePath();
     boolean isDockerInstalled =
         dockerExecutable == null
-            ? DockerClient.isDefaultDockerInstalled()
-            : DockerClient.isDockerInstalled(dockerExecutable);
+            ? CliDockerClient.isDefaultDockerInstalled()
+            : CliDockerClient.isDockerInstalled(dockerExecutable);
     if (!isDockerInstalled) {
       throw new GradleException(
           HelpfulSuggestions.forDockerNotInstalled(HELPFUL_SUGGESTIONS_PREFIX));
@@ -180,6 +181,11 @@ public class BuildDockerTask extends DefaultTask implements JibTask {
       throw new GradleException(
           HelpfulSuggestions.forInvalidImageReference(ex.getInvalidReference()), ex);
 
+    } catch (ExtraDirectoryNotFoundException ex) {
+      throw new GradleException(
+          "extraDirectories.paths contain \"from\" directory that doesn't exist locally: "
+              + ex.getPath(),
+          ex);
     } finally {
       tempDirectoryProvider.close();
       TaskCommon.finishUpdateChecker(projectProperties, updateCheckFuture);

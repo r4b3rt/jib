@@ -17,8 +17,10 @@
 package com.google.cloud.tools.jib.builder.steps;
 
 import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.google.cloud.tools.jib.api.DescriptorDigest;
+import com.google.cloud.tools.jib.api.DockerClient;
+import com.google.cloud.tools.jib.api.ImageDetails;
 import com.google.cloud.tools.jib.api.ImageReference;
 import com.google.cloud.tools.jib.blob.Blob;
 import com.google.cloud.tools.jib.blob.BlobDescriptor;
@@ -30,8 +32,6 @@ import com.google.cloud.tools.jib.cache.Cache;
 import com.google.cloud.tools.jib.cache.CacheCorruptedException;
 import com.google.cloud.tools.jib.cache.CachedLayer;
 import com.google.cloud.tools.jib.configuration.BuildContext;
-import com.google.cloud.tools.jib.docker.DockerClient;
-import com.google.cloud.tools.jib.docker.DockerClient.DockerImageDetails;
 import com.google.cloud.tools.jib.docker.json.DockerManifestEntryTemplate;
 import com.google.cloud.tools.jib.event.progress.ThrottledAccumulatingConsumer;
 import com.google.cloud.tools.jib.filesystem.TempDirectoryProvider;
@@ -109,7 +109,7 @@ public class LocalBaseImageSteps {
               new TimerEventDispatcher(
                   buildContext.getEventHandlers(),
                   "Saving " + imageReference + " from Docker daemon")) {
-        DockerClient.DockerImageDetails dockerImageDetails = dockerClient.inspect(imageReference);
+        ImageDetails dockerImageDetails = dockerClient.inspect(imageReference);
         Optional<LocalImage> cachedImage =
             getCachedDockerImage(buildContext.getBaseImageLayersCache(), dockerImageDetails);
         if (cachedImage.isPresent()) {
@@ -119,7 +119,7 @@ public class LocalBaseImageSteps {
         }
 
         Path tarPath = tempDirectoryProvider.newDirectory().resolve("out.tar");
-        long size = dockerClient.inspect(imageReference).getSize();
+        long size = dockerImageDetails.getSize();
         try (ProgressEventDispatcher dockerProgress =
                 progressEventDispatcher
                     .newChildProducer()
@@ -176,8 +176,7 @@ public class LocalBaseImageSteps {
   }
 
   @VisibleForTesting
-  static Optional<LocalImage> getCachedDockerImage(
-      Cache cache, DockerImageDetails dockerImageDetails)
+  static Optional<LocalImage> getCachedDockerImage(Cache cache, ImageDetails dockerImageDetails)
       throws DigestException, IOException, CacheCorruptedException {
     // Get config
     Optional<ContainerConfigurationTemplate> cachedConfig =
@@ -216,12 +215,15 @@ public class LocalBaseImageSteps {
             "Extracting tar " + tarPath + " into " + destination)) {
       TarExtractor.extract(tarPath, destination);
 
-      InputStream manifestStream = Files.newInputStream(destination.resolve("manifest.json"));
-      DockerManifestEntryTemplate loadManifest =
-          new ObjectMapper()
-              .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
-              .readValue(manifestStream, DockerManifestEntryTemplate[].class)[0];
-      manifestStream.close();
+      DockerManifestEntryTemplate loadManifest;
+      try (InputStream manifestStream =
+          Files.newInputStream(destination.resolve("manifest.json"))) {
+        loadManifest =
+            JsonMapper.builder()
+                .configure(MapperFeature.ACCEPT_CASE_INSENSITIVE_PROPERTIES, true)
+                .build()
+                .readValue(manifestStream, DockerManifestEntryTemplate[].class)[0];
+      }
 
       Path configPath = destination.resolve(loadManifest.getConfig());
       ContainerConfigurationTemplate configurationTemplate =

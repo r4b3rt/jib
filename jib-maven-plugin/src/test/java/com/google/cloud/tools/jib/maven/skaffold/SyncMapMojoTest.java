@@ -68,6 +68,9 @@ public class SyncMapMojoTest {
       throws VerificationException, IOException {
     Path logFile = runBuild(projectRoot, module, pomXml);
     List<String> outputLines = Files.readAllLines(logFile, StandardCharsets.UTF_8);
+    if (outputLines.size() != 0 && outputLines.get(0).startsWith("Picked up JAVA_TOOL_OPTIONS:")) {
+      outputLines.remove(0);
+    }
     Assert.assertEquals(3, outputLines.size()); // we expect ["\n", "<marker>", "<sync-json>"]
     Assert.assertEquals("BEGIN JIB JSON: SYNCMAP/1", outputLines.get(1));
     return outputLines.get(2); // this is the JSON output
@@ -126,12 +129,20 @@ public class SyncMapMojoTest {
         generated.get(1));
 
     List<FileTemplate> direct = parsed.getDirect();
-    Assert.assertEquals(1, direct.size());
+    Assert.assertEquals(3, direct.size());
     assertFilePaths(
         m2.resolve(
             "com/google/cloud/tools/tiny-test-lib/0.0.1-SNAPSHOT/tiny-test-lib-0.0.1-SNAPSHOT.jar"),
         AbsoluteUnixPath.get("/app/libs/tiny-test-lib-0.0.1-SNAPSHOT.jar"),
         direct.get(0));
+    assertFilePaths(
+        projectRoot.resolve("complex-service/src/main/jib1/foo"),
+        AbsoluteUnixPath.get("/foo"),
+        direct.get(1));
+    assertFilePaths(
+        projectRoot.resolve("complex-service/src/main/jib2/bar"),
+        AbsoluteUnixPath.get("/bar"),
+        direct.get(2));
   }
 
   @Test

@@ -47,8 +47,8 @@ public class GradleRawConfiguration implements RawConfiguration {
   }
 
   @Override
-  public Optional<String> getFromCredHelper() {
-    return Optional.ofNullable(jibExtension.getFrom().getCredHelper());
+  public CredHelperConfiguration getFromCredHelper() {
+    return jibExtension.getFrom().getCredHelper();
   }
 
   @Override
@@ -62,8 +62,8 @@ public class GradleRawConfiguration implements RawConfiguration {
   }
 
   @Override
-  public Optional<String> getToCredHelper() {
-    return Optional.ofNullable(jibExtension.getTo().getCredHelper());
+  public CredHelperConfiguration getToCredHelper() {
+    return jibExtension.getTo().getCredHelper();
   }
 
   @Override
@@ -153,12 +153,12 @@ public class GradleRawConfiguration implements RawConfiguration {
 
   @Override
   public String getFilesModificationTime() {
-    return jibExtension.getContainer().getFilesModificationTime();
+    return jibExtension.getContainer().getFilesModificationTime().get();
   }
 
   @Override
   public String getCreationTime() {
-    return jibExtension.getContainer().getCreationTime();
+    return jibExtension.getContainer().getCreationTime().get();
   }
 
   @Override
@@ -174,7 +174,8 @@ public class GradleRawConfiguration implements RawConfiguration {
 
   @Override
   public Map<String, FilePermissions> getExtraDirectoryPermissions() {
-    return TaskCommon.convertPermissionsMap(jibExtension.getExtraDirectories().getPermissions());
+    return TaskCommon.convertPermissionsMap(
+        jibExtension.getExtraDirectories().getPermissions().get());
   }
 
   @Override

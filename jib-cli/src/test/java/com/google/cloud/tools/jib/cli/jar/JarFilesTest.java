@@ -70,8 +70,9 @@ public class JarFilesTest {
         "8, eclipse-temurin:8-jre",
         "9, eclipse-temurin:11-jre",
         "11, eclipse-temurin:11-jre",
-        "13, azul/zulu-openjdk:17-jre",
-        "17, azul/zulu-openjdk:17-jre",
+        "13, eclipse-temurin:17-jre",
+        "17, eclipse-temurin:17-jre",
+        "21, eclipse-temurin:21-jre",
       })
   public void testToJibContainer_defaultBaseImage(int javaVersion, String expectedBaseImage)
       throws IOException, InvalidImageReferenceException {

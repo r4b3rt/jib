@@ -32,6 +32,7 @@ For information about the project, see the [Jib project README](../README.md).
   * [Example](#example)
   * [Adding Arbitrary Files to the Image](#adding-arbitrary-files-to-the-image)
   * [Authentication Methods](#authentication-methods)
+    * [Using Docker configuration files](#using-docker-configuration-files)
     * [Using Docker Credential Helpers](#using-docker-credential-helpers)
     * [Using Specific Credentials](#using-specific-credentials)
     * [Using Maven Settings](#using-maven-settings)
@@ -47,7 +48,7 @@ For information about the project, see the [Jib project README](../README.md).
 You can containerize your application easily with one command:
 
 ```shell
-mvn compile com.google.cloud.tools:jib-maven-plugin:3.1.4:build -Dimage=<MY IMAGE>
+mvn compile com.google.cloud.tools:jib-maven-plugin:3.4.4:build -Dimage=<MY IMAGE>
 ```
 
 This builds and pushes a container image for your application to a container registry. *If you encounter authentication issues, see [Authentication Methods](#authentication-methods).*
@@ -55,7 +56,7 @@ This builds and pushes a container image for your application to a container reg
 To build to a Docker daemon, use:
 
 ```shell
-mvn compile com.google.cloud.tools:jib-maven-plugin:3.1.4:dockerBuild
+mvn compile com.google.cloud.tools:jib-maven-plugin:3.4.4:dockerBuild
 ```
 
 If you would like to set up Jib as part of your Maven build, follow the guide below.
@@ -73,7 +74,7 @@ In your Maven Java project, add the plugin to your `pom.xml`:
       <plugin>
         <groupId>com.google.cloud.tools</groupId>
         <artifactId>jib-maven-plugin</artifactId>
-        <version>3.1.4</version>
+        <version>3.4.4</version>
         <configuration>
           <to>
             <image>myimage</image>
@@ -133,7 +134,7 @@ For example, to build the image `my-docker-id/my-app`, the configuration would b
 </configuration>
 ```
 
-#### Using [JFrog Container Registry (JCR)](https://www.jfrog.com/confluence/display/JFROG/JFrog+Container+Registry/) or [JFrog Artifactory](https://www.jfrog.com/confluence/display/JFROG/Getting+Started+with+Artifactory+as+a+Docker+Registry)...
+#### Using [JFrog Container Registry (JCR)](https://jfrog.com/container-registry) or [JFrog Artifactory](https://jfrog.com/help/r/jfrog-artifactory-documentation/getting-started-with-artifactory-as-a-docker-registry)...
 
 *Make sure you have a [docker-credential-helper](https://github.com/docker/docker-credential-helpers#available-programs) set up. For example, on macOS, the credential helper would be `docker-credential-osxkeychain`. See [Authentication Methods](#authentication-methods) for other ways of authenticating.*
 
@@ -232,7 +233,7 @@ mvn package
 
 ### Additional Build Artifacts
 
-As part of an image build, Jib also writes out the _image digest_ and the _image ID_. By default, these are written out to `target/jib-image.digest` and `target/jib-image.id` respectively, but the locations can be configured using the `<outputFiles><digest>` and `<outputFiles><imageId>` configuration properties. See [Extended Usage](#outputpaths-object) for more details.
+As part of an image build, Jib also writes out the _image digest_ and the _image ID_. By default, these are written out to `target/jib-image.digest` and `target/jib-image.id` respectively, but the locations can be configured using the `<outputPaths><digest>` and `<outputPaths><imageId>` configuration properties. See [Extended Usage](#outputpaths-object) for more details.
 
 ## Multi Module Projects
 
@@ -260,16 +261,16 @@ Field | Type | Default | Description
 
 Property | Type | Default | Description
 --- | --- | --- | ---
-`image` | string | `adoptopenjdk:{8,11}-jre` (or `jetty` for WAR) | The image reference for the base image. The source type can be specified using a [special type prefix](#setting-the-base-image).
+`image` | string | `eclipse-temurin:{8,11,17,21}-jre` (or `jetty` for WAR) | The image reference for the base image. The source type can be specified using a [special type prefix](#setting-the-base-image).
 `auth` | [`auth`](#auth-object) | *None* | Specifies credentials directly (alternative to `credHelper`).
 `credHelper` | string | *None* | Specifies a credential helper that can authenticate pulling the base image. This parameter can either be configured as an absolute path to the credential helper executable or as a credential helper suffix (following `docker-credential-`).
-`platforms` | list | See [`platform`](#platform-object) | _Incubating feature_: Configures platforms of base images to select from a manifest list.
+`platforms` | list | See [`platform`](#platform-object) | Configures platforms of base images to select from a manifest list.
 
 <a name="to-object"></a>`to` is an object with the following properties:
 
 Property | Type | Default | Description
 --- | --- | --- | ---
-`image` | string | *Required* | The image reference for the target image. This can also be specified via the `-Dimage` command line option.
+`image` | string | *Required* | The image reference for the target image. This can also be specified via the `-Dimage` command line option. If the tag is not present here `:latest` is implied.
 `auth` | [`auth`](#auth-object) | *None* | Specifies credentials directly (alternative to `credHelper`).
 `credHelper` | string | *None* | Specifies a credential helper that can authenticate pushing the target image. This parameter can either be configured as an absolute path to the credential helper executable or as a credential helper suffix (following `docker-credential-`).
 `tags` | list | *None* | Additional tags to push to.
@@ -340,7 +341,7 @@ Property | Type | Default | Description
 
 Property | Type | Default | Description
 --- | --- | --- | ---
-`executable` | string | `docker` | Sets the path to the Docker executable that is called to load the image into the Docker daemon.
+`executable` | string | `docker` | Sets the path to the Docker executable that is called to load the image into the Docker daemon. **Please note**: Users are responsible for ensuring that the Docker path passed in is valid and has the right permissions to be executed.
 `environment` | map | *None* | Sets environment variables used by the Docker executable.
 
 #### System Properties
@@ -375,20 +376,20 @@ Property | Type | Default | Description
 *\*\*\* The default base image cache is in the following locations on each platform:*
  * *Linux: `[cache root]/google-cloud-tools-java/jib/`, where `[cache root]` is `$XDG_CACHE_HOME` (`$HOME/.cache/` if not set)*
  * *Mac: `[cache root]/Google/Jib/`, where `[cache root]` is `$XDG_CACHE_HOME` (`$HOME/Library/Caches/` if not set)*
- * *Windows: `[cache root]\Google\Jib\Cache`, where `[cache root]` is `$XDG_CACHE_HOME` (`%LOCALAPPDATA%` if not set)*
+ * *Windows: `[cache root]\Google\Jib\Cache`, where `[cache root]` is `%XDG_CACHE_HOME%` (`%LOCALAPPDATA%` if not set)*
 
 ### Global Jib Configuration
 
 Some options can be set in the global Jib configuration file. The file is at the following locations on each platform:
 
 * *Linux: `[config root]/google-cloud-tools-java/jib/config.json`, where `[config root]` is `$XDG_CONFIG_HOME` (`$HOME/.config/` if not set)*
-* *Mac: `[config root]/Google/Jib/config.json`, where `[config root]` is `$XDG_CONFIG_HOME` (`$HOME/Library/Preferences/Config/` if not set)*
-* *Windows: `[config root]\Google\Jib\Config\config.json`, where `[config root]` is `$XDG_CONFIG_HOME` (`%LOCALAPPDATA%` if not set)*
+* *Mac: `[config root]/Google/Jib/config.json`, where `[config root]` is `$XDG_CONFIG_HOME` (`$HOME/Library/Preferences/` if not set)*
+* *Windows: `[config root]\Google\Jib\Config\config.json`, where `[config root]` is `%XDG_CONFIG_HOME%` (`%LOCALAPPDATA%` if not set)*
 
-#### Properties 
+#### Properties
 
 * `disableUpdateCheck`: when set to true, disables the periodic up-to-date version check.
-* `registryMirrors`: a list of mirror settings for each base image registry. In the following example, if the base image configured in Jib is for a Docker Hub image, then `mirror.gcr.io`, `localhost:5000`, and the Docker Hub (`registry-1.docker.io`) are tried in order until Jib can successfuly pull a base image.
+* `registryMirrors`: a list of mirror settings for each base image registry. In the following example, if the base image configured in Jib is for a Docker Hub image, then `mirror.gcr.io`, `localhost:5000`, and the Docker Hub (`registry-1.docker.io`) are tried in order until Jib can successfully pull a base image.
 
 ```json
 {
@@ -460,8 +461,8 @@ There are three different types of base images that Jib accepts: an image from a
 
 Prefix | Example | Type
 --- | --- | ---
-*None* | `adoptopenjdk:11-jre` | Pulls the base image from a registry.
-`registry://` | `registry://adoptopenjdk:11-jre` | Pulls the base image from a registry.
+*None* | `openjdk:11-jre` | Pulls the base image from a registry.
+`registry://` | `registry://eclipse-temurin:11-jre` | Pulls the base image from a registry.
 `docker://` | `docker://busybox` | Retrieves the base image from the Docker daemon.
 `tar://` | `tar:///path/to/file.tar` | Uses an image tarball stored at the specified path as the base image. Also accepts relative paths (e.g. `tar://target/jib-image.tar`).
 
@@ -546,7 +547,13 @@ You may also specify the target of the copy and include or exclude files:
 
 ### Authentication Methods
 
-Pushing/pulling from private registries require authorization credentials. These can be [retrieved using Docker credential helpers](#using-docker-credential-helpers) or [defined in your Maven settings](#using-maven-settings). If you do not define credentials explicitly, Jib will try to [use credentials defined in your Docker config](/../../issues/101) or infer common credential helpers.
+Pushing/pulling from private registries require authorization credentials.
+
+#### Using Docker configuration files
+
+* Jib looks from credentials from `$XDG_RUNTIME_DIR/containers/auth.json`, `$XDG_CONFIG_HOME/containers/auth.json`, `$HOME/.config/containers/auth.json`, `$DOCKER_CONFIG/config.json`, and `$HOME/.docker/config.json`.
+
+See [this issue](/../../issues/101) and [`man containers-auth.json`](https://www.mankier.com/5/containers-auth.json) for more information about the files.
 
 #### Using Docker Credential Helpers
 

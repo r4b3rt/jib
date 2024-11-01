@@ -54,6 +54,8 @@ import org.slf4j.LoggerFactory;
 public class ContainerizerIntegrationTest {
 
   @Rule public final RestoreSystemProperties systemPropertyRestorer = new RestoreSystemProperties();
+  private final String dockerHost =
+      System.getenv("DOCKER_IP") != null ? System.getenv("DOCKER_IP") : "localhost";
 
   /**
    * Helper class to hold a {@link ProgressEventHandler} and verify that it handles a full progress.
@@ -113,28 +115,24 @@ public class ContainerizerIntegrationTest {
 
   private static void assertDockerInspect(String imageReference)
       throws IOException, InterruptedException {
-    String dockerContainerConfig = new Command("docker", "inspect", imageReference).run();
-    MatcherAssert.assertThat(
-        dockerContainerConfig,
-        CoreMatchers.containsString(
-            "            \"ExposedPorts\": {\n"
-                + "                \"1000/tcp\": {},\n"
-                + "                \"2000/tcp\": {},\n"
-                + "                \"2001/tcp\": {},\n"
-                + "                \"2002/tcp\": {},\n"
-                + "                \"3000/udp\": {}"));
-    MatcherAssert.assertThat(
-        dockerContainerConfig,
-        CoreMatchers.containsString(
-            "            \"Labels\": {\n"
-                + "                \"key1\": \"value1\",\n"
-                + "                \"key2\": \"value2\"\n"
-                + "            }"));
+    String dockerInspectExposedPorts =
+        new Command("docker", "inspect", "-f", "'{{json .Config.ExposedPorts}}'", imageReference)
+            .run();
+    String dockerInspectLabels =
+        new Command("docker", "inspect", "-f", "'{{json .Config.Labels}}'", imageReference).run();
     String dockerConfigEnv =
         new Command("docker", "inspect", "-f", "{{.Config.Env}}", imageReference).run();
+    String history = new Command("docker", "history", imageReference).run();
+
+    MatcherAssert.assertThat(
+        dockerInspectExposedPorts,
+        CoreMatchers.containsString(
+            "\"1000/tcp\":{},\"2000/tcp\":{},\"2001/tcp\":{},\"2002/tcp\":{},\"3000/udp\":{}"));
+    MatcherAssert.assertThat(
+        dockerInspectLabels,
+        CoreMatchers.containsString("\"key1\":\"value1\",\"key2\":\"value2\""));
     MatcherAssert.assertThat(dockerConfigEnv, CoreMatchers.containsString("env1=envvalue1"));
     MatcherAssert.assertThat(dockerConfigEnv, CoreMatchers.containsString("env2=envvalue2"));
-    String history = new Command("docker", "history", imageReference).run();
     MatcherAssert.assertThat(history, CoreMatchers.containsString("jib-integration-test"));
     MatcherAssert.assertThat(history, CoreMatchers.containsString("bazel build ..."));
   }
@@ -156,7 +154,7 @@ public class ContainerizerIntegrationTest {
       throws IOException, InterruptedException, ExecutionException, RegistryException,
           CacheDirectoryCreationException, InvalidImageReferenceException {
     System.setProperty("jib.alwaysCacheBaseImage", "true");
-    String imageReference = "localhost:5000/testimage:testtag";
+    String imageReference = dockerHost + ":" + "5000/testimage:testtag";
     Path cacheDirectory = temporaryFolder.newFolder().toPath();
     Containerizer containerizer =
         Containerizer.to(RegistryImage.named(imageReference))
@@ -192,7 +190,7 @@ public class ContainerizerIntegrationTest {
     Assert.assertEquals(
         "Hello, world. An argument.\n", new Command("docker", "run", "--rm", imageReference).run());
 
-    String imageReferenceByDigest = "localhost:5000/testimage@" + image1.getDigest();
+    String imageReferenceByDigest = dockerHost + ":5000/testimage@" + image1.getDigest();
     localRegistry.pull(imageReferenceByDigest);
     assertDockerInspect(imageReferenceByDigest);
     Assert.assertEquals(
@@ -206,23 +204,23 @@ public class ContainerizerIntegrationTest {
           CacheDirectoryCreationException, InvalidImageReferenceException {
     buildImage(
         ImageReference.of("gcr.io", "distroless/java", DISTROLESS_DIGEST),
-        Containerizer.to(RegistryImage.named("localhost:5000/testimage:testtag")),
+        Containerizer.to(RegistryImage.named(dockerHost + ":5000/testimage:testtag")),
         Arrays.asList("testtag2", "testtag3"));
 
-    String imageReference = "localhost:5000/testimage:testtag";
+    String imageReference = dockerHost + ":5000/testimage:testtag";
     localRegistry.pull(imageReference);
     assertDockerInspect(imageReference);
     Assert.assertEquals(
         "Hello, world. An argument.\n", new Command("docker", "run", "--rm", imageReference).run());
 
-    String imageReference2 = "localhost:5000/testimage:testtag2";
+    String imageReference2 = dockerHost + ":5000/testimage:testtag2";
     localRegistry.pull(imageReference2);
     assertDockerInspect(imageReference2);
     Assert.assertEquals(
         "Hello, world. An argument.\n",
         new Command("docker", "run", "--rm", imageReference2).run());
 
-    String imageReference3 = "localhost:5000/testimage:testtag3";
+    String imageReference3 = dockerHost + ":5000/testimage:testtag3";
     localRegistry.pull(imageReference3);
     assertDockerInspect(imageReference3);
     Assert.assertEquals(
@@ -239,24 +237,24 @@ public class ContainerizerIntegrationTest {
     JibContainer image1 =
         buildImage(
             ImageReference.scratch(),
-            Containerizer.to(RegistryImage.named("localhost:5000/testimagerepo:testtag")),
+            Containerizer.to(RegistryImage.named(dockerHost + ":5000/testimagerepo:testtag")),
             Collections.singletonList("testtag2"));
 
     // Test that the initial image with the original tag has been pushed.
-    localRegistry.pull("localhost:5000/testimagerepo:testtag");
+    localRegistry.pull(dockerHost + ":5000/testimagerepo:testtag");
     // Test that any additional tags have also been pushed with the original image.
-    localRegistry.pull("localhost:5000/testimagerepo:testtag2");
+    localRegistry.pull(dockerHost + ":5000/testimagerepo:testtag2");
 
     // Push the same image with a different tag, with SKIP_EXISTING_IMAGES enabled.
     JibContainer image2 =
         buildImage(
             ImageReference.scratch(),
-            Containerizer.to(RegistryImage.named("localhost:5000/testimagerepo:new_testtag")),
+            Containerizer.to(RegistryImage.named(dockerHost + ":5000/testimagerepo:new_testtag")),
             Collections.emptyList());
 
     // Test that the pull request throws an exception, indicating that the new tag was not pushed.
     try {
-      localRegistry.pull("localhost:5000/testimagerepo:new_testtag");
+      localRegistry.pull(dockerHost + ":5000/testimagerepo:new_testtag");
       Assert.fail(
           "jib.skipExistingImages was enabled and digest was already pushed, "
               + "hence new_testtag shouldn't have been pushed.");
@@ -264,12 +262,16 @@ public class ContainerizerIntegrationTest {
       MatcherAssert.assertThat(
           ex.getMessage(),
           CoreMatchers.containsString(
-              "manifest for localhost:5000/testimagerepo:new_testtag not found"));
+              "manifest for " + dockerHost + ":5000/testimagerepo:new_testtag not found"));
     }
 
     // Test that both images have the same properties.
     Assert.assertEquals(image1.getDigest(), image2.getDigest());
     Assert.assertEquals(image1.getImageId(), image2.getImageId());
+
+    // Test that the first image was pushed while the second one was skipped
+    Assert.assertTrue(image1.isImagePushed());
+    Assert.assertFalse(image2.isImagePushed());
   }
 
   @Test
@@ -278,10 +280,10 @@ public class ContainerizerIntegrationTest {
           RegistryException, CacheDirectoryCreationException {
     buildImage(
         ImageReference.parse("openjdk:8-jre-slim"),
-        Containerizer.to(RegistryImage.named("localhost:5000/testimage:testtag")),
+        Containerizer.to(RegistryImage.named(dockerHost + ":5000/testimage:testtag")),
         Collections.emptyList());
 
-    String imageReference = "localhost:5000/testimage:testtag";
+    String imageReference = dockerHost + ":5000/testimage:testtag";
     new Command("docker", "pull", imageReference).run();
     Assert.assertEquals(
         "Hello, world. An argument.\n", new Command("docker", "run", "--rm", imageReference).run());

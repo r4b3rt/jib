@@ -4,6 +4,7 @@
 ![Build Status](https://storage.googleapis.com/cloud-tools-for-java-kokoro-build-badges/jib-ubuntu-master-orb.svg)
 ![Build Status](https://storage.googleapis.com/cloud-tools-for-java-kokoro-build-badges/jib-windows-master-orb.svg)
 ![Build Status](https://storage.googleapis.com/cloud-tools-for-java-kokoro-build-badges/jib-macos-master-orb.svg)
+[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev)
 [![Gitter version](https://img.shields.io/gitter/room/gitterHQ/gitter.svg)](https://gitter.im/google/jib)
 
 # Jib
@@ -18,10 +19,12 @@
 
 Jib builds optimized Docker and [OCI](https://github.com/opencontainers/image-spec) images for your Java applications without a Docker daemon - and without deep mastery of Docker best-practices. It is available as plugins for [Maven](jib-maven-plugin) and [Gradle](jib-gradle-plugin) and as a Java library.
 
-[Maven](https://maven.apache.org/): See documentation for [jib-maven-plugin](jib-maven-plugin).\
-[Gradle](https://gradle.org/): See documentation for [jib-gradle-plugin](jib-gradle-plugin).\
-[Jib Core](jib-core): A general-purpose container-building library for Java.\
-[Jib CLI](jib-cli): A command-line interface for building images that uses Jib Core.
+- [Maven](https://maven.apache.org/): See documentation for [jib-maven-plugin](jib-maven-plugin).
+- [Gradle](https://gradle.org/): See documentation for [jib-gradle-plugin](jib-gradle-plugin).
+- [Jib Core](jib-core): A general-purpose container-building library for Java.
+- [Jib CLI](jib-cli): A command-line interface for building images that uses Jib Core.
+
+Jib works well with Google Cloud Build. For details, see [how to use Jib on Google Cloud Build](docs/google-cloud-build.md).
 
 For more information, check out the [official blog post](https://cloudplatform.googleblog.com/2018/07/introducing-jib-build-java-docker-images-better.html) or watch [this talk](https://www.youtube.com/watch?v=H6gR_Cv4yWI) ([slides](https://speakerdeck.com/coollog/build-containers-faster-with-jib-a-google-image-build-tool-for-java-applications)).
 
@@ -54,7 +57,7 @@ The [examples](examples) directory includes the following examples (and more).
 
 ## How Jib Works
 
-Whereas traditionally a Java application is built as a single image layer with the application JAR, Jib's build strategy separates the Java application into multiple layers for more granular incremental builds. When you change your code, only your changes are rebuilt, not your entire application. These layers, by default, are layered on top of the [AdoptOpenJDK](https://hub.docker.com/_/adoptopenjdk) base image, but you can also configure a custom base image. For more information, check out the [official blog post](https://cloudplatform.googleblog.com/2018/07/introducing-jib-build-java-docker-images-better.html) or watch [this talk](https://www.youtube.com/watch?v=H6gR_Cv4yWI) ([slides](https://speakerdeck.com/coollog/build-containers-faster-with-jib-a-google-image-build-tool-for-java-applications)).
+Whereas traditionally a Java application is built as a single image layer with the application JAR, Jib's build strategy separates the Java application into multiple layers for more granular incremental builds. When you change your code, only your changes are rebuilt, not your entire application. These layers, by default, are layered on top of an [OpenJDK base image](docs/default_base_image.md), but you can also configure a custom base image. For more information, check out the [official blog post](https://cloudplatform.googleblog.com/2018/07/introducing-jib-build-java-docker-images-better.html) or watch [this talk](https://www.youtube.com/watch?v=H6gR_Cv4yWI) ([slides](https://speakerdeck.com/coollog/build-containers-faster-with-jib-a-google-image-build-tool-for-java-applications)).
 
 See also [rules_docker](https://github.com/bazelbuild/rules_docker) for a similar existing container image build tool for the [Bazel build system](https://github.com/bazelbuild/bazel).
 

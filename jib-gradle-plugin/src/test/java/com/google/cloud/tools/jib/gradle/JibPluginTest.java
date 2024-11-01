@@ -137,7 +137,7 @@ public class JibPluginTest {
     // Gradle tests aren't run from a jar and so don't have an identifiable plugin version
     assertThat(exception)
         .hasMessageThat()
-        .isEqualTo("Failed to apply plugin [id 'com.google.cloud.tools.jib']");
+        .isEqualTo("Failed to apply plugin 'com.google.cloud.tools.jib'.");
     assertThat(exception.getCause())
         .hasMessageThat()
         .isEqualTo("Could not determine Jib plugin version");
@@ -366,6 +366,63 @@ public class JibPluginTest {
     assertThat(showLabels.getOutput())
         .contains(
             "labels contain values [firstkey:updated-first-label, secondKey:updated-second-label]");
+  }
+
+  @Test
+  public void testLazyEvalForEntryPoint() {
+    BuildResult showEntrypoint = testProject.build("showentrypoint", "-Djib.console=plain");
+    assertThat(showEntrypoint.getOutput()).contains("entrypoint contains updated");
+  }
+
+  @Test
+  public void testLazyEvalForExtraDirectories() {
+    BuildResult checkExtraDirectories =
+        testProject.build("check-extra-directories", "-Djib.console=plain");
+    assertThat(checkExtraDirectories.getOutput()).contains("[/updated:755]");
+    assertThat(checkExtraDirectories.getOutput()).contains("updated-custom-extra-dir");
+  }
+
+  @Test
+  public void testLazyEvalForExtraDirectories_individualPaths() throws IOException {
+    BuildResult checkExtraDirectories =
+        testProject.build(
+            "check-extra-directories", "-b=build-extra-dirs.gradle", "-Djib.console=plain");
+
+    Path extraDirectoryPath =
+        testProject
+            .getProjectRoot()
+            .resolve("src")
+            .resolve("main")
+            .resolve("updated-custom-extra-dir")
+            .toRealPath();
+    assertThat(checkExtraDirectories.getOutput())
+        .contains("extraDirectories (from): [" + extraDirectoryPath + "]");
+    assertThat(checkExtraDirectories.getOutput())
+        .contains("extraDirectories (into): [/updated-custom-into-dir]");
+    assertThat(checkExtraDirectories.getOutput())
+        .contains("extraDirectories (includes): [[include.txt]]");
+    assertThat(checkExtraDirectories.getOutput())
+        .contains("extraDirectories (excludes): [[exclude.txt]]");
+  }
+
+  @Test
+  public void testLazyEvalForContainerCreationAndFileModificationTimes() {
+    BuildResult showTimes = testProject.build("showtimes", "-Djib.console=plain");
+    String output = showTimes.getOutput();
+    assertThat(output).contains("creationTime=2022-07-19T10:23:42Z");
+    assertThat(output).contains("filesModificationTime=2022-07-19T11:23:42Z");
+  }
+
+  @Test
+  public void testLazyEvalForMainClass() {
+    BuildResult showLabels = testProject.build("showMainClass");
+    assertThat(showLabels.getOutput()).contains("mainClass value updated");
+  }
+
+  @Test
+  public void testLazyEvalForJvmFlags() {
+    BuildResult showLabels = testProject.build("showJvmFlags");
+    assertThat(showLabels.getOutput()).contains("jvmFlags value [updated]");
   }
 
   private Project createProject(String... plugins) {

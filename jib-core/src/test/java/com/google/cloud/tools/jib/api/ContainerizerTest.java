@@ -17,6 +17,7 @@
 package com.google.cloud.tools.jib.api;
 
 import com.google.cloud.tools.jib.configuration.ImageConfiguration;
+import com.google.cloud.tools.jib.docker.AnotherDockerClient;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.MoreExecutors;
 import java.io.IOException;
@@ -36,11 +37,13 @@ public class ContainerizerTest {
   public void testTo() throws CacheDirectoryCreationException, InvalidImageReferenceException {
     RegistryImage registryImage = RegistryImage.named("registry/image");
     DockerDaemonImage dockerDaemonImage = DockerDaemonImage.named("daemon/image");
-    TarImage tarImage = TarImage.at(Paths.get("ignored")).named("tar/iamge");
+    TarImage tarImage = TarImage.at(Paths.get("ignored")).named("tar/image");
+    DockerClient dockerClient = new AnotherDockerClient();
 
     verifyTo(Containerizer.to(registryImage));
     verifyTo(Containerizer.to(dockerDaemonImage));
     verifyTo(Containerizer.to(tarImage));
+    verifyTo(Containerizer.to(dockerClient, dockerDaemonImage));
   }
 
   private void verifyTo(Containerizer containerizer) throws CacheDirectoryCreationException {
@@ -104,10 +107,10 @@ public class ContainerizerTest {
 
   @Test
   public void testGetImageConfiguration_dockerDaemonImage() throws InvalidImageReferenceException {
-    Containerizer containerizer = Containerizer.to(DockerDaemonImage.named("docker/deamon/image"));
+    Containerizer containerizer = Containerizer.to(DockerDaemonImage.named("docker/daemon/image"));
 
     ImageConfiguration imageConfiguration = containerizer.getImageConfiguration();
-    Assert.assertEquals("docker/deamon/image", imageConfiguration.getImage().toString());
+    Assert.assertEquals("docker/daemon/image", imageConfiguration.getImage().toString());
     Assert.assertEquals(0, imageConfiguration.getCredentialRetrievers().size());
   }
 

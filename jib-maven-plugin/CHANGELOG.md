@@ -7,9 +7,110 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Changed the default base image from the `adoptopenjdk` images to the [`eclipse-temurin`](https://hub.docker.com/_/eclipse-temurin) (for Java 8 and 11) and [`azul/zulu-openjdk`](https://hub.docker.com/r/azul/zulu-openjdk) (for Java 17) images on Docker Hub. Note that Temurin (by Adoptium) is the new name of AdoptOpenJDK. ([#3491](https://github.com/GoogleContainerTools/jib/pull/3491))
+### Fixed
+
+## 3.4.4
+- fix: allow pushing images with different arch/os to docker daemon [#4265](https://github.com/GoogleContainerTools/jib/issues/4265)
+- fix: address windows deadlock issue when determining docker environment info [#4267](https://github.com/GoogleContainerTools/jib/issues/4265)
+
+## 3.4.3
 
 ### Fixed
+- fix: When building to the local docker daemon with multiple platforms configured, Jib will now automatically select the image that matches the OS type and architecture of the local Docker environment. ([#4249](https://github.com/GoogleContainerTools/jib/pull/4249))
+
+## 3.4.2
+
+### Changed
+- deps: bump org.apache.commons:commons-compress from 1.21 to 1.26.0 ([#4204](https://github.com/GoogleContainerTools/jib/pull/4204))
+
+### Fixed
+- fix: set PAX headers to address build reproducibility issue ([#4204](https://github.com/GoogleContainerTools/jib/pull/4204))
+- fix: (WAR Containerization) modify default entrypoint to `java -jar /usr/local/jetty/start.jar --module=ee10-deploy` for Jetty 12+ compatibility ([#4216](https://github.com/GoogleContainerTools/jib/pull/4216))
+
+## 3.4.1
+
+### Fixed
+- fix: support parsing manifest JSON containing `LayerSources:` from latest Docker. ([#4171](https://github.com/GoogleContainerTools/jib/pull/4171))
+
+## 3.4.0
+
+### Changed
+- deps: bump org.apache.maven:maven-compat from 3.9.1 to 3.9.2. ([#4017](https://github.com/GoogleContainerTools/jib/pull/4017/))
+- deps: bump com.github.luben:zstd-jni from 1.5.5-2 to 1.5.5-4. ([#4049](https://github.com/GoogleContainerTools/jib/pull/4049/))
+- deps: bump com.fasterxml.jackson:jackson-bom from 2.15.0 to 2.15.2. ([#4055](https://github.com/GoogleContainerTools/jib/pull/4055))
+- deps: bump com.google.guava:guava from 32.0.1-jre to 32.1.2-jre ([#4078](https://github.com/GoogleContainerTools/jib/pull/4078))
+- deps: bump org.slf4j:slf4j-simple from 2.0.7 to 2.0.9. ([#4098](https://github.com/GoogleContainerTools/jib/pull/4098))
+
+### Fixed
+- fix: fix WWW-Authenticate header parsing for Basic authentication ([#4035](https://github.com/GoogleContainerTools/jib/pull/4035/))
+
+## 3.3.2
+
+### Changed
+- Log an info instead of warning when entrypoint makes the image to ignore jvm parameters ([#3904](https://github.com/GoogleContainerTools/jib/pull/3904))
+
+Thanks to our community contributors @rmannibucau!
+
+## 3.3.1
+
+### Changed
+- Upgraded Google HTTP libraries to 1.42.2 ([#3745](https://github.com/GoogleContainerTools/jib/pull/3745))
+
+## 3.3.0
+
+### Added
+
+- Included `imagePushed` field to image metadata json output file which provides information on whether an image was pushed by Jib. Note that the output file is `build/jib-image.json` by default or configurable with `jib.outputPaths.imageJson`. ([#3641](https://github.com/GoogleContainerTools/jib/pull/3641))
+- Better error messaging when environment map in `container.environment` contains null values ([#3672](https://github.com/GoogleContainerTools/jib/pull/3672)).
+- Support for OCI image index manifests ([#3715](https://github.com/GoogleContainerTools/jib/pull/3715)).
+- Support for base image layer compressed with zstd ([#3717](https://github.com/GoogleContainerTools/jib/pull/3717)).
+
+### Changed
+
+- Upgraded slf4j-simple and slf4j-api to 2.0.0 ([#3734](https://github.com/GoogleContainerTools/jib/pull/3734), [#3735](https://github.com/GoogleContainerTools/jib/pull/3735)).
+- Upgraded nullaway to 0.9.9. ([#3720](https://github.com/GoogleContainerTools/jib/pull/3720))
+- Jib now only checks for file existence instead of running the executable passed into `dockerClient.executable` for the purpose of verifying if docker is installed correctly. Users are responsible for ensuring that the docker executable specified through this property is valid and has the correct permissions ([#3744](https://github.com/GoogleContainerTools/jib/pull/3744)).
+- Jib now throws an exception when the base image doesn't support target platforms during multi-platform build ([#3707](https://github.com/GoogleContainerTools/jib/pull/3707)).
+
+Thanks to our community contributors @wwadge, @oliver-brm, @rquinio and @gsquared94!
+
+## 3.2.1
+
+### Added
+
+- Environment variables can now be used in configuring credential helpers. ([#2814](https://github.com/GoogleContainerTools/jib/issues/2814))
+  ```xml
+  <to>
+      <image>myimage</image>
+      <credHelper>
+          <helper>ecr-login</helper>
+          <environment>
+              <AWS_PROFILE>profile</AWS_PROFILE>
+          </environment>
+      </credHelper>
+  </to>
+  ```
+
+### Changed
+
+- Upgraded jackson-databind to 2.13.2.2 ([#3612](https://github.com/GoogleContainerTools/jib/pull/3612)).
+
+## 3.2.0
+
+### Added
+
+- [`<from><platforms>`](https://github.com/GoogleContainerTools/jib/tree/master/jib-maven-plugin#from-object) parameter for multi-architecture image building can now be configured through Maven and system properties (for example, `-Djib.from.platforms=linux/amd64,linux/arm64` on the command-line). ([#2742](https://github.com/GoogleContainerTools/jib/pull/2742))
+- For retrieving credentials, Jib additionally looks for `$XDG_RUNTIME_DIR/containers/auth.json`, `$XDG_CONFIG_HOME/containers/auth.json`, and `$HOME/.config/containers/auth.json`. ([#3524](https://github.com/GoogleContainerTools/jib/issues/3524))
+
+
+### Changed
+
+- Changed the default base image of the Jib CLI `jar` command from the `adoptopenjdk` images to the [`eclipse-temurin`](https://hub.docker.com/_/eclipse-temurin) on Docker Hub. Note that Temurin (by Adoptium) is the new name of AdoptOpenJDK. ([#3483](https://github.com/GoogleContainerTools/jib/issues/3483))
+- Build will fail if `<extraDirectories><paths>` contain `from` directory that doesn't exist locally ([#3542](https://github.com/GoogleContainerTools/jib/issues/3542))
+
+### Fixed
+
+- Fixed incorrect parsing with comma escaping when providing Jib list or map property values on the command-line. ([#2224](https://github.com/GoogleContainerTools/jib/issues/2224))
 
 ## 3.1.4
 

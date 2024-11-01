@@ -16,18 +16,25 @@
 
 package com.google.cloud.tools.jib.docker;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
+
 import com.google.cloud.tools.jib.api.DescriptorDigest;
+import com.google.cloud.tools.jib.api.DockerClient;
+import com.google.cloud.tools.jib.api.DockerInfoDetails;
 import com.google.cloud.tools.jib.api.ImageReference;
-import com.google.cloud.tools.jib.docker.DockerClient.DockerImageDetails;
+import com.google.cloud.tools.jib.docker.CliDockerClient.DockerImageDetails;
 import com.google.cloud.tools.jib.image.ImageTarball;
 import com.google.cloud.tools.jib.json.JsonTemplateMapper;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
+import com.google.common.io.Resources;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.security.DigestException;
@@ -47,9 +54,9 @@ import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.VoidAnswer1;
 
-/** Tests for {@link DockerClient}. */
+/** Tests for {@link CliDockerClient}. */
 @RunWith(MockitoJUnitRunner.class)
-public class DockerClientTest {
+public class CliDockerClientTest {
 
   @Rule public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
@@ -70,13 +77,74 @@ public class DockerClientTest {
 
   @Test
   public void testIsDockerInstalled_fail() {
-    Assert.assertFalse(DockerClient.isDockerInstalled(Paths.get("path/to/nonexistent/file")));
+    Assert.assertFalse(CliDockerClient.isDockerInstalled(Paths.get("path/to/nonexistent/file")));
+  }
+
+  @Test
+  public void testIsDockerInstalled_pass() throws URISyntaxException {
+    Assert.assertTrue(
+        CliDockerClient.isDockerInstalled(
+            Paths.get(Resources.getResource("core/docker/emptyFile").toURI())));
+  }
+
+  @Test
+  public void testInfo() throws InterruptedException, IOException {
+    String dockerInfoJson = "{ \"OSType\": \"windows\"," + "\"Architecture\": \"arm64\"}";
+    DockerClient testDockerClient =
+        new CliDockerClient(
+            subcommand -> {
+              assertThat(subcommand).containsExactly("info", "-f", "{{json .}}");
+              return mockProcessBuilder;
+            });
+    // Simulates stdout.
+    Mockito.when(mockProcess.getInputStream())
+        .thenReturn(new ByteArrayInputStream(dockerInfoJson.getBytes()));
+
+    DockerInfoDetails infoDetails = testDockerClient.info();
+    assertThat(infoDetails.getArchitecture()).isEqualTo("arm64");
+    assertThat(infoDetails.getOsType()).isEqualTo("windows");
+  }
+
+  @Test
+  public void testInfo_fail() throws InterruptedException {
+    DockerClient testDockerClient =
+        new CliDockerClient(
+            subcommand -> {
+              assertThat(subcommand).containsExactly("info", "-f", "{{json .}}");
+              return mockProcessBuilder;
+            });
+    Mockito.when(mockProcess.waitFor()).thenReturn(1);
+    Mockito.when(mockProcess.getErrorStream())
+        .thenReturn(new ByteArrayInputStream("error".getBytes(StandardCharsets.UTF_8)));
+
+    IOException exception = assertThrows(IOException.class, testDockerClient::info);
+    assertThat(exception)
+        .hasMessageThat()
+        .contains("'docker info' command failed with error: error");
+  }
+
+  @Test
+  public void testInfo_returnsUnknownKeys() throws InterruptedException, IOException {
+    String dockerInfoJson = "{ \"unknownOS\": \"windows\"," + "\"unknownArchitecture\": \"arm64\"}";
+    DockerClient testDockerClient =
+        new CliDockerClient(
+            subcommand -> {
+              assertThat(subcommand).containsExactly("info", "-f", "{{json .}}");
+              return mockProcessBuilder;
+            });
+    Mockito.when(mockProcess.waitFor()).thenReturn(0);
+    Mockito.when(mockProcess.getInputStream())
+        .thenReturn(new ByteArrayInputStream(dockerInfoJson.getBytes()));
+
+    DockerInfoDetails infoDetails = testDockerClient.info();
+    assertThat(infoDetails.getArchitecture()).isEmpty();
+    assertThat(infoDetails.getOsType()).isEmpty();
   }
 
   @Test
   public void testLoad() throws IOException, InterruptedException {
     DockerClient testDockerClient =
-        new DockerClient(
+        new CliDockerClient(
             subcommand -> {
               Assert.assertEquals(Collections.singletonList("load"), subcommand);
               return mockProcessBuilder;
@@ -100,7 +168,7 @@ public class DockerClientTest {
 
   @Test
   public void testLoad_stdinFail() throws InterruptedException {
-    DockerClient testDockerClient = new DockerClient(ignored -> mockProcessBuilder);
+    DockerClient testDockerClient = new CliDockerClient(ignored -> mockProcessBuilder);
 
     Mockito.when(mockProcess.getOutputStream())
         .thenReturn(
@@ -125,7 +193,7 @@ public class DockerClientTest {
 
   @Test
   public void testLoad_stdinFail_stderrFail() throws InterruptedException {
-    DockerClient testDockerClient = new DockerClient(ignored -> mockProcessBuilder);
+    DockerClient testDockerClient = new CliDockerClient(ignored -> mockProcessBuilder);
 
     Mockito.when(mockProcess.getOutputStream())
         .thenReturn(
@@ -157,7 +225,7 @@ public class DockerClientTest {
 
   @Test
   public void testLoad_stdoutFail() throws InterruptedException {
-    DockerClient testDockerClient = new DockerClient(ignored -> mockProcessBuilder);
+    DockerClient testDockerClient = new CliDockerClient(ignored -> mockProcessBuilder);
     Mockito.when(mockProcess.waitFor()).thenReturn(1);
 
     Mockito.when(mockProcess.getOutputStream()).thenReturn(ByteStreams.nullOutputStream());
@@ -213,7 +281,7 @@ public class DockerClientTest {
   @Test
   public void testDefaultProcessorBuilderFactory_customExecutable() {
     ProcessBuilder processBuilder =
-        DockerClient.defaultProcessBuilderFactory("docker-executable", ImmutableMap.of())
+        CliDockerClient.defaultProcessBuilderFactory("docker-executable", ImmutableMap.of())
             .apply(Arrays.asList("sub", "command"));
 
     Assert.assertEquals(
@@ -229,7 +297,7 @@ public class DockerClientTest {
     expectedEnvironment.putAll(environment);
 
     ProcessBuilder processBuilder =
-        DockerClient.defaultProcessBuilderFactory("docker", environment)
+        CliDockerClient.defaultProcessBuilderFactory("docker", environment)
             .apply(Collections.emptyList());
 
     Assert.assertEquals(expectedEnvironment, processBuilder.environment());
@@ -238,7 +306,7 @@ public class DockerClientTest {
   @Test
   public void testSize_fail() throws InterruptedException {
     DockerClient testDockerClient =
-        new DockerClient(
+        new CliDockerClient(
             subcommand -> {
               Assert.assertEquals("inspect", subcommand.get(0));
               return mockProcessBuilder;
@@ -317,7 +385,7 @@ public class DockerClientTest {
   }
 
   private DockerClient makeDockerSaveClient() {
-    return new DockerClient(
+    return new CliDockerClient(
         subcommand -> {
           try {
             if (subcommand.contains("{{.Size}}")) {

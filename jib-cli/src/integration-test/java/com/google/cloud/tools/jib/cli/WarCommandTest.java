@@ -19,12 +19,10 @@ package com.google.cloud.tools.jib.cli;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.cloud.tools.jib.Command;
-import com.google.cloud.tools.jib.blob.Blobs;
+import com.google.cloud.tools.jib.api.HttpRequestTester;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -86,10 +84,21 @@ public class WarCommandTest {
             .execute("war", "--target", "docker://exploded-war", warPath.toString());
     assertThat(exitCode).isEqualTo(0);
     String output =
-        new Command("docker", "run", "--rm", "--detach", "-p8080:8080", "exploded-war").run();
+        new Command(
+                "docker",
+                "run",
+                "--rm",
+                "--detach",
+                "-p8080:8080",
+                "exploded-war",
+                "--privileged",
+                "--network=host")
+            .run();
     containerName = output.trim();
 
-    assertThat(getContent(new URL("http://localhost:8080/hello"))).isEqualTo("Hello world");
+    HttpRequestTester.verifyBody(
+        "Hello world",
+        new URL("http://" + HttpRequestTester.fetchDockerHostForHttpRequest() + ":8080/hello"));
   }
 
   @Test
@@ -103,7 +112,7 @@ public class WarCommandTest {
                 "war",
                 "--target",
                 "docker://exploded-war-custom-jetty",
-                "--from=jetty:9.4-jre11",
+                "--from=jetty:11.0-jre11-slim-openjdk",
                 warPath.toString());
     assertThat(exitCode).isEqualTo(0);
     String output =
@@ -111,7 +120,9 @@ public class WarCommandTest {
             .run();
     containerName = output.trim();
 
-    assertThat(getContent(new URL("http://localhost:8080/hello"))).isEqualTo("Hello world");
+    HttpRequestTester.verifyBody(
+        "Hello world",
+        new URL("http://" + HttpRequestTester.fetchDockerHostForHttpRequest() + ":8080/hello"));
   }
 
   @Test
@@ -125,7 +136,7 @@ public class WarCommandTest {
                 "war",
                 "--target",
                 "docker://exploded-war-tomcat",
-                "--from=tomcat:8.5-jre8-alpine",
+                "--from=tomcat:10-jre8-openjdk-slim",
                 "--app-root",
                 "/usr/local/tomcat/webapps/ROOT",
                 warPath.toString());
@@ -135,24 +146,8 @@ public class WarCommandTest {
             .run();
     containerName = output.trim();
 
-    assertThat(getContent(new URL("http://localhost:8080/hello"))).isEqualTo("Hello world");
-  }
-
-  @Nullable
-  private static String getContent(URL url) throws InterruptedException {
-    for (int i = 0; i < 40; i++) {
-      Thread.sleep(500);
-      try {
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        if (connection.getResponseCode() == HttpURLConnection.HTTP_OK) {
-          try (InputStream in = connection.getInputStream()) {
-            return Blobs.writeToString(Blobs.from(in));
-          }
-        }
-      } catch (IOException ignored) {
-        // ignored
-      }
-    }
-    return null;
+    HttpRequestTester.verifyBody(
+        "Hello world",
+        new URL("http://" + HttpRequestTester.fetchDockerHostForHttpRequest() + ":8080/hello"));
   }
 }

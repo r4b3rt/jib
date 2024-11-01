@@ -20,6 +20,7 @@ import com.google.cloud.tools.jib.maven.extension.JibMavenPluginExtension;
 import com.google.cloud.tools.jib.plugins.common.AuthProperty;
 import com.google.cloud.tools.jib.plugins.common.ConfigurationPropertyValidator;
 import com.google.cloud.tools.jib.plugins.common.PropertyNames;
+import com.google.cloud.tools.jib.plugins.common.RawConfiguration.CredHelperConfiguration;
 import com.google.cloud.tools.jib.plugins.common.RawConfiguration.ExtensionConfiguration;
 import com.google.cloud.tools.jib.plugins.common.RawConfiguration.ExtraDirectoriesConfiguration;
 import com.google.cloud.tools.jib.plugins.common.RawConfiguration.PlatformConfiguration;
@@ -31,11 +32,14 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
@@ -134,6 +138,17 @@ public abstract class JibPluginConfiguration extends AbstractMojo {
   /** Configuration for {@code platform} parameter. */
   public static class PlatformParameters implements PlatformConfiguration {
 
+    private static PlatformParameters of(String osArchitecture) {
+      Matcher matcher = Pattern.compile("([^/ ]+)/([^/ ]+)").matcher(osArchitecture);
+      if (!matcher.matches()) {
+        throw new IllegalArgumentException("Platform must be of form os/architecture.");
+      }
+      PlatformParameters platformParameters = new PlatformParameters();
+      platformParameters.os = matcher.group(1);
+      platformParameters.architecture = matcher.group(2);
+      return platformParameters;
+    }
+
     @Nullable @Parameter private String os;
     @Nullable @Parameter private String architecture;
 
@@ -148,20 +163,56 @@ public abstract class JibPluginConfiguration extends AbstractMojo {
     }
   }
 
+  /** Configuration for {@code [from|to].credHelper} parameter. */
+  public static class CredHelperParameters implements CredHelperConfiguration {
+    @Nullable @Parameter private String helper;
+    @Parameter private Map<String, String> environment = new HashMap<>();
+
+    @Override
+    public Optional<String> getHelperName() {
+      return Optional.ofNullable(helper);
+    }
+
+    @Override
+    public Map<String, String> getEnvironment() {
+      return environment;
+    }
+
+    public void setHelper(@Nullable String helper) {
+      this.helper = helper;
+    }
+
+    /**
+     * Default setter for Maven. Makes this syntax possible:
+     *
+     * <pre>{@code
+     * <configuration>
+     *   <to>
+     *     ...
+     *     <credHelper>ecr-login</credHelper>
+     *     ...
+     *   </to>
+     * </configuration>
+     * }</pre>
+     *
+     * @param helper the credential helper
+     */
+    public void set(@Nullable String helper) {
+      this.helper = helper;
+    }
+  }
+
   /** Configuration for {@code from} parameter. */
   public static class FromConfiguration {
 
     @Nullable @Parameter private String image;
-    @Nullable @Parameter private String credHelper;
+    @Parameter private CredHelperParameters credHelper = new CredHelperParameters();
     @Parameter private FromAuthConfiguration auth = new FromAuthConfiguration();
     @Parameter private List<PlatformParameters> platforms;
 
     /** Constructor for defaults. */
     public FromConfiguration() {
-      PlatformParameters platform = new PlatformParameters();
-      platform.os = "linux";
-      platform.architecture = "amd64";
-      platforms = Collections.singletonList(platform);
+      platforms = Collections.singletonList(PlatformParameters.of("linux/amd64"));
     }
   }
 
@@ -170,7 +221,7 @@ public abstract class JibPluginConfiguration extends AbstractMojo {
 
     @Nullable @Parameter private String image;
     @Parameter private List<String> tags = Collections.emptyList();
-    @Nullable @Parameter private String credHelper;
+    @Parameter private CredHelperParameters credHelper = new CredHelperParameters();
     @Parameter private ToAuthConfiguration auth = new ToAuthConfiguration();
 
     public void set(String image) {
@@ -354,6 +405,12 @@ public abstract class JibPluginConfiguration extends AbstractMojo {
    * @return the specified platforms
    */
   List<PlatformParameters> getPlatforms() {
+    String property = getProperty(PropertyNames.FROM_PLATFORMS);
+    if (property != null) {
+      return ConfigurationPropertyValidator.parseListProperty(property).stream()
+          .map(PlatformParameters::of)
+          .collect(Collectors.toList());
+    }
     return from.platforms;
   }
 
@@ -372,15 +429,14 @@ public abstract class JibPluginConfiguration extends AbstractMojo {
   }
 
   /**
-   * Gets the base image credential helper.
+   * Gets the base image credential helper configuration.
    *
-   * @return the configured base image credential helper name
+   * @return configuration for the base image credential helper
    */
-  @Nullable
-  String getBaseImageCredentialHelperName() {
+  CredHelperConfiguration getBaseImageCredHelperConfig() {
     String property = getProperty(PropertyNames.FROM_CRED_HELPER);
     if (property != null) {
-      return property;
+      from.credHelper.setHelper(property);
     }
     return from.credHelper;
   }
@@ -425,15 +481,14 @@ public abstract class JibPluginConfiguration extends AbstractMojo {
   }
 
   /**
-   * Gets the target image credential helper.
+   * Gets the target image credential helper configuration.
    *
-   * @return the configured target image credential helper name
+   * @return configuration for the target image credential helper
    */
-  @Nullable
-  String getTargetImageCredentialHelperName() {
+  CredHelperConfiguration getTargetImageCredentialHelperConfig() {
     String property = getProperty(PropertyNames.TO_CRED_HELPER);
     if (property != null) {
-      return property;
+      to.credHelper.setHelper(property);
     }
     return to.credHelper;
   }

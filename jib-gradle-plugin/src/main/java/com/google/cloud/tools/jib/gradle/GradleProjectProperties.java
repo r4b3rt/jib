@@ -70,10 +70,11 @@ import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier;
 import org.gradle.api.file.FileCollection;
 import org.gradle.api.logging.Logger;
-import org.gradle.api.plugins.JavaPluginConvention;
+import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.plugins.WarPlugin;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
 import org.gradle.jvm.tasks.Jar;
 
@@ -397,17 +398,26 @@ public class GradleProjectProperties implements ProjectProperties {
   }
 
   /**
-   * Returns the input files for a task. These files include the runtimeClasspath of the application
-   * and any extraDirectories defined by the user to include in the container.
+   * Returns the input files for a task. These files include the gradle {@link
+   * org.gradle.api.artifacts.Configuration}, output directories (classes, resources, etc.) of the
+   * main {@link org.gradle.api.tasks.SourceSet}, and any extraDirectories defined by the user to
+   * include in the container.
    *
    * @param project the gradle project
    * @param extraDirectories the image's configured extra directories
    * @return the input files
    */
+  @VisibleForTesting
   static FileCollection getInputFiles(
       Project project, List<Path> extraDirectories, String configurationName) {
     List<FileCollection> dependencyFileCollections = new ArrayList<>();
     dependencyFileCollections.add(project.getConfigurations().getByName(configurationName));
+    // Output directories (classes and resources) from main SourceSet are added
+    // so that BuildTarTask picks up changes in these and do not skip task
+    SourceSetContainer sourceSetContainer =
+        project.getExtensions().getByType(SourceSetContainer.class);
+    SourceSet mainSourceSet = sourceSetContainer.getByName(MAIN_SOURCE_SET_NAME);
+    dependencyFileCollections.add(mainSourceSet.getOutput());
 
     extraDirectories.stream()
         .filter(Files::exists)
@@ -431,10 +441,10 @@ public class GradleProjectProperties implements ProjectProperties {
   @Override
   public int getMajorJavaVersion() {
     JavaVersion version = JavaVersion.current();
-    JavaPluginConvention javaPluginConvention =
-        project.getConvention().findPlugin(JavaPluginConvention.class);
-    if (javaPluginConvention != null) {
-      version = javaPluginConvention.getTargetCompatibility();
+    JavaPluginExtension javaPluginExtension =
+        project.getExtensions().findByType(JavaPluginExtension.class);
+    if (javaPluginExtension != null) {
+      version = javaPluginExtension.getTargetCompatibility();
     }
     return Integer.valueOf(version.getMajorVersion());
   }
@@ -535,8 +545,8 @@ public class GradleProjectProperties implements ProjectProperties {
   }
 
   private SourceSet getMainSourceSet() {
-    JavaPluginConvention javaPluginConvention =
-        project.getConvention().getPlugin(JavaPluginConvention.class);
-    return javaPluginConvention.getSourceSets().getByName(MAIN_SOURCE_SET_NAME);
+    SourceSetContainer sourceSetContainer =
+        project.getExtensions().getByType(SourceSetContainer.class);
+    return sourceSetContainer.getByName(MAIN_SOURCE_SET_NAME);
   }
 }

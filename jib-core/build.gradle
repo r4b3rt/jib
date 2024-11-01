@@ -4,6 +4,14 @@ plugins {
   id 'eclipse'
 }
 
+java {
+  // Feature to handle base image layers compressed with zstd instead of gzip
+  // Will need to re-assess the optional dependency when zstd becomes widely used
+  registerFeature('zstdSupport') {
+    usingSourceSet(sourceSets.main)
+  }
+}
+
 dependencies {
   api dependencyStrings.BUILD_PLAN
   implementation dependencyStrings.GOOGLE_HTTP_CLIENT
@@ -11,7 +19,9 @@ dependencies {
   implementation dependencyStrings.GOOGLE_AUTH_LIBRARY_OAUTH2_HTTP
 
   implementation dependencyStrings.COMMONS_COMPRESS
+  zstdSupportImplementation  dependencyStrings.ZSTD_JNI
   implementation dependencyStrings.GUAVA
+  implementation(platform(dependencyStrings.JACKSON_BOM))
   implementation dependencyStrings.JACKSON_DATABIND
   implementation dependencyStrings.JACKSON_DATATYPE_JSR310
   implementation dependencyStrings.ASM
@@ -22,6 +32,7 @@ dependencies {
   testImplementation dependencyStrings.MOCKITO_CORE
   testImplementation dependencyStrings.SLF4J_API
   testImplementation dependencyStrings.SYSTEM_RULES
+  testImplementation dependencyStrings.ZSTD_JNI
 
   integrationTestImplementation dependencyStrings.JBCRYPT
 }

@@ -18,6 +18,7 @@ package com.google.cloud.tools.jib.gradle;
 
 import com.google.cloud.tools.jib.Command;
 import com.google.cloud.tools.jib.IntegrationTestingConfiguration;
+import com.google.cloud.tools.jib.api.HttpRequestTester;
 import java.io.IOException;
 import java.net.URL;
 import java.security.DigestException;
@@ -54,9 +55,11 @@ public class SpringBootProjectIntegrationTest {
                 "-c",
                 "/app/classpath/spring-boot-original.jar")
             .run();
-    Assert.assertEquals("1360 /app/classpath/spring-boot-original.jar\n", output);
 
-    Assert.assertEquals("Hello world", JibRunHelper.getContent(new URL("http://localhost:8080")));
+    Assert.assertEquals("1360 /app/classpath/spring-boot-original.jar\n", output);
+    HttpRequestTester.verifyBody(
+        "Hello world",
+        new URL("http://" + HttpRequestTester.fetchDockerHostForHttpRequest() + ":8080"));
   }
 
   private void buildAndRunWebApp(String label, String gradleBuildFile)

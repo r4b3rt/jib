@@ -65,30 +65,24 @@ public class BuildDockerMojoIntegrationTest {
       throws VerificationException, IOException, InterruptedException, DigestException {
     buildToDockerDaemon(project, imageReference, "pom.xml");
 
-    String dockerInspect = new Command("docker", "inspect", imageReference).run();
+    String dockerInspectVolumes =
+        new Command("docker", "inspect", "-f", "'{{json .Config.Volumes}}'", imageReference).run();
+    String dockerInspectExposedPorts =
+        new Command("docker", "inspect", "-f", "'{{json .Config.ExposedPorts}}'", imageReference)
+            .run();
+    String dockerInspectLabels =
+        new Command("docker", "inspect", "-f", "'{{json .Config.Labels}}'", imageReference).run();
+    String history = new Command("docker", "history", imageReference).run();
+
     MatcherAssert.assertThat(
-        dockerInspect,
-        CoreMatchers.containsString(
-            "            \"Volumes\": {\n"
-                + "                \"/var/log\": {},\n"
-                + "                \"/var/log2\": {}\n"
-                + "            },"));
+        dockerInspectVolumes, CoreMatchers.containsString("\"/var/log\":{},\"/var/log2\":{}"));
     MatcherAssert.assertThat(
-        dockerInspect,
+        dockerInspectExposedPorts,
         CoreMatchers.containsString(
-            "            \"ExposedPorts\": {\n"
-                + "                \"1000/tcp\": {},\n"
-                + "                \"2000/udp\": {},\n"
-                + "                \"2001/udp\": {},\n"
-                + "                \"2002/udp\": {},\n"
-                + "                \"2003/udp\": {}"));
+            "\"1000/tcp\":{},\"2000/udp\":{},\"2001/udp\":{},\"2002/udp\":{},\"2003/udp\":{}"));
     MatcherAssert.assertThat(
-        dockerInspect,
-        CoreMatchers.containsString(
-            "            \"Labels\": {\n"
-                + "                \"key1\": \"value1\",\n"
-                + "                \"key2\": \"value2\"\n"
-                + "            }"));
+        dockerInspectLabels,
+        CoreMatchers.containsString("\"key1\":\"value1\",\"key2\":\"value2\""));
 
     return new Command("docker", "run", "--rm", imageReference).run();
   }
@@ -260,5 +254,35 @@ public class BuildDockerMojoIntegrationTest {
       MatcherAssert.assertThat(
           ex.getMessage(), CoreMatchers.containsString("but is required to be [,1.0]"));
     }
+  }
+
+  @Test
+  public void testCredHelperConfigurationSimple()
+      throws DigestException, VerificationException, IOException, InterruptedException {
+    String targetImage = "simpleimage:maven" + System.nanoTime();
+    buildToDockerDaemon(simpleTestProject, targetImage, "pom-cred-helper-1.xml");
+    Assert.assertEquals(
+        "Hello, world. \n1970-01-01T00:00:01Z\n",
+        new Command("docker", "run", "--rm", targetImage).run());
+  }
+
+  @Test
+  public void testCredHelperConfigurationComplex()
+      throws DigestException, VerificationException, IOException, InterruptedException {
+    String targetImage = "simpleimage:maven" + System.nanoTime();
+    buildToDockerDaemon(simpleTestProject, targetImage, "pom-cred-helper-2.xml");
+    Assert.assertEquals(
+        "Hello, world. \n1970-01-01T00:00:01Z\n",
+        new Command("docker", "run", "--rm", targetImage).run());
+  }
+
+  @Test
+  public void testMultiPlatform()
+      throws DigestException, VerificationException, IOException, InterruptedException {
+    String targetImage = "multiplatformproject:maven" + System.nanoTime();
+    buildToDockerDaemon(simpleTestProject, targetImage, "pom-multiplatform-build.xml");
+    Assert.assertEquals(
+        "Hello, world. \n1970-01-01T00:00:01Z\n",
+        new Command("docker", "run", "--rm", targetImage).run());
   }
 }

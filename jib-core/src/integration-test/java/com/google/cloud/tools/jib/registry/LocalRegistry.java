@@ -26,8 +26,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Nullable;
 import org.junit.rules.ExternalResource;
@@ -37,6 +41,8 @@ import org.mindrot.jbcrypt.BCrypt;
 public class LocalRegistry extends ExternalResource {
 
   private final String containerName = "registry-" + UUID.randomUUID();
+  public final String dockerHost =
+      System.getenv("DOCKER_IP") != null ? System.getenv("DOCKER_IP") : "localhost";
   private final int port;
   @Nullable private final String username;
   @Nullable private final String password;
@@ -74,16 +80,25 @@ public class LocalRegistry extends ExternalResource {
       // BCrypt generates hashes using $2a$ algorithm (instead of $2y$ from docs), but this seems
       // to work okay
       String credentialString = username + ":" + BCrypt.hashpw(password, BCrypt.gensalt());
-      Path tempFolder = Files.createTempDirectory(Paths.get("/tmp"), "");
+      FileAttribute<Set<PosixFilePermission>> attrs =
+          PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwxr-xr-x"));
+      Path tempFolder = Files.createTempDirectory(Paths.get("/tmp"), "", attrs);
       Files.write(
           tempFolder.resolve("htpasswd"), credentialString.getBytes(StandardCharsets.UTF_8));
-
+      String authenticationVolume = tempFolder + ":/auth";
+      if (System.getenv("KOKORO_JOB_CLUSTER") != null
+          && System.getenv("KOKORO_JOB_CLUSTER").equals("MACOS_EXTERNAL")) {
+        authenticationVolume = "/home/docker/auth:/auth";
+      } else if (System.getenv("KOKORO_JOB_CLUSTER") != null
+          && System.getenv("KOKORO_JOB_CLUSTER").equals("GCP_UBUNTU_DOCKER")) {
+        authenticationVolume = "/tmpfs/auth:/auth";
+      }
       // Run the Docker registry
       dockerTokens.addAll(
           Arrays.asList(
               "-v",
               // Volume mount used for storing credentials
-              tempFolder + ":/auth",
+              authenticationVolume,
               "-e",
               "REGISTRY_AUTH=htpasswd",
               "-e",
@@ -131,26 +146,26 @@ public class LocalRegistry extends ExternalResource {
   public void pullAndPushToLocal(String from, String to) throws IOException, InterruptedException {
     login();
     new Command("docker", "pull", from).run();
-    new Command("docker", "tag", from, "localhost:" + port + "/" + to).run();
-    new Command("docker", "push", "localhost:" + port + "/" + to).run();
+    new Command("docker", "tag", from, dockerHost + ":" + port + "/" + to).run();
+    new Command("docker", "push", dockerHost + ":" + port + "/" + to).run();
     logout();
   }
 
   private void login() throws IOException, InterruptedException {
     if (username != null && password != null) {
-      new Command("docker", "login", "localhost:" + port, "-u", username, "--password-stdin")
+      new Command("docker", "login", dockerHost + ":" + port, "-u", username, "--password-stdin")
           .run(password.getBytes(StandardCharsets.UTF_8));
     }
   }
 
   private void logout() throws IOException, InterruptedException {
     if (username != null && password != null) {
-      new Command("docker", "logout", "localhost:" + port).run();
+      new Command("docker", "logout", dockerHost + ":" + port).run();
     }
   }
 
   private void waitUntilReady() throws InterruptedException, MalformedURLException {
-    URL queryUrl = new URL("http://localhost:" + port + "/v2/_catalog");
+    URL queryUrl = new URL("http://" + dockerHost + ":" + port + "/v2/_catalog");
 
     for (int i = 0; i < 40; i++) {
       try {

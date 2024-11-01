@@ -9,6 +9,50 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+## 0.13.0
+
+### Added
+
+### Changed
+
+### Fixed
+- fix: support parsing manifest JSON containing `LayerSources:` from latest Docker. ([#4171](https://github.com/GoogleContainerTools/jib/pull/4171))
+- fix: (WAR Containerization) modify default entrypoint to `java -jar /usr/local/jetty/start.jar --module=ee10-deploy` for Jetty 12+ compatibility ([#4216](https://github.com/GoogleContainerTools/jib/pull/4216))
+
+## 0.12.0
+
+### Changed
+- Upgraded Google HTTP libraries to 1.42.2 ([#3745](https://github.com/GoogleContainerTools/jib/pull/3745))
+- Re-synchronized jackson dependencies with BOM to use latest versions ([#3768](https://github.com/GoogleContainerTools/jib/pull/3768))
+
+## 0.11.0
+
+### Added
+- Included `imagePushed` field to image metadata json output file which provides information on whether an image was pushed by Jib. ([#3641](https://github.com/GoogleContainerTools/jib/pull/3641))
+- Better error messaging when environment map in `container.environment` contains null values ([#3672](https://github.com/GoogleContainerTools/jib/pull/3672)).
+- Starting with jib-cli 0.11.0, [SLSA 3 signatures](https://slsa.dev/) will be generated with every release. ([#3762](https://github.com/GoogleContainerTools/jib/pull/3726)).
+
+### Changed
+- Upgraded slf4j-api to 2.0.0 ([#3735](https://github.com/GoogleContainerTools/jib/pull/3735)).
+- Upgraded nullaway to 0.9.9 ([#3720](https://github.com/GoogleContainerTools/jib/pull/3720)).
+
+Thanks to our community contributors @wwadge @oliver-brm and @laurentsimon!
+
+## 0.10.0
+
+### Changed
+- Upgraded jackson-databind to 2.13.2.2 ([#3612](https://github.com/GoogleContainerTools/jib/issues/3612)).
+
+### Fixed
+
+- Incorrect release sha256 file for jib-cli. ([#3584](https://github.com/GoogleContainerTools/jib/issues/3584))
+
+## 0.9.0
+
+### Changed
+
+- For Java 17, changed the default base image of the Jib CLI `jar` command from the `azul/zulu-openjdk` to [`eclipse-temurin`](https://hub.docker.com/_/eclipse-temurin). ([#3483](https://github.com/GoogleContainerTools/jib/issues/3483))
+
 ## 0.8.0
 
 ### Added

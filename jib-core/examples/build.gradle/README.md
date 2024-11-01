@@ -10,10 +10,11 @@ For example, the following snippet is a simple example that creates a Gradle tas
 // Imports Jib Core as a library to use in this build script.
 buildscript {
   repositories {
+    mavenLocal()
     mavenCentral()
   }
   dependencies {
-    classpath 'com.google.cloud.tools:jib-core:0.16.0'
+    classpath 'com.google.cloud.tools:jib-core:0.27.0'
   }
 }
 
@@ -41,11 +42,11 @@ task('dojib') {
                     // Tells Jib to get registry credentials from a Docker config.
                     .addCredentialRetriever(
                         CredentialRetrieverFactory
-                            .forImage(ImageReference.parse(targetImage))
+                            .forImage(
+                                    ImageReference.parse(targetImage),
+                                    logEvent -> logger.log(LogLevel.valueOf(logEvent.getLevel().name()), logEvent.getMessage()))
                             .dockerConfig())))
     println 'done'
   }
 }
 ```
-
-

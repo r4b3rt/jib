@@ -32,9 +32,11 @@ For information about the project, see the [Jib project README](../README.md).
   * [Example](#example)
   * [Adding Arbitrary Files to the Image](#adding-arbitrary-files-to-the-image)
   * [Authentication Methods](#authentication-methods)
+    * [Using Docker configuration files](#using-docker-configuration-files)
     * [Using Docker Credential Helpers](#using-docker-credential-helpers)
     * [Using Specific Credentials](#using-specific-credentials)
   * [Custom Container Entrypoint](#custom-container-entrypoint)
+  * [Reproducible Build Timestamps](#reproducible-build-timestamps)
   * [Jib Extensions](#jib-extensions)
   * [WAR Projects](#war-projects)
   * [Skaffold Integration](#skaffold-integration)
@@ -51,7 +53,7 @@ In your Gradle Java project, add the plugin to your `build.gradle`:
 
 ```groovy
 plugins {
-  id 'com.google.cloud.tools.jib' version '3.1.4'
+  id 'com.google.cloud.tools.jib' version '3.4.4'
 }
 ```
 
@@ -107,7 +109,7 @@ For example, to build the image `my-docker-id/my-app`, the configuration would b
 jib.to.image = 'my-docker-id/my-app'
 ```
 
-#### Using [JFrog Container Registry (JCR)](https://www.jfrog.com/confluence/display/JFROG/JFrog+Container+Registry/) or [JFrog Artifactory](https://www.jfrog.com/confluence/display/JFROG/Getting+Started+with+Artifactory+as+a+Docker+Registry)...
+#### Using [JFrog Container Registry (JCR)](https://jfrog.com/container-registry) or [JFrog Artifactory](https://jfrog.com/help/r/jfrog-artifactory-documentation/getting-started-with-artifactory-as-a-docker-registry)...
 
 *Make sure you have a [docker-credential-helper](https://github.com/docker/docker-credential-helpers#available-programs) set up. For example, on macOS, the credential helper would be `docker-credential-osxkeychain`. See [Authentication Methods](#authentication-methods) for other ways of authenticating.*
 
@@ -182,7 +184,7 @@ Then, ```gradle build``` will build and containerize your application.
 
 ### Additional Build Artifacts
 
-As part of an image build, Jib also writes out the _image digest_ and the _image ID_. By default, these are written out to `build/jib-image.digest` and `build/jib-image.id` respectively, but the locations can be configured using the `jib.outputFiles.digest` and `jib.outputFiles.imageId` configuration properties. See [Extended Usage](#outputpaths-closure) for more details.
+As part of an image build, Jib also writes out the _image digest_ and the _image ID_. By default, these are written out to `build/jib-image.digest` and `build/jib-image.id` respectively, but the locations can be configured using the `jib.outputPaths.digest` and `jib.outputPaths.imageId` configuration properties. See [Extended Usage](#outputpaths-closure) for more details.
 
 ## Multi Module Projects
 
@@ -210,16 +212,16 @@ Field | Type | Default | Description
 
 Property | Type | Default | Description
 --- | --- | --- | ---
-`image` | `String` | `adoptopenjdk:{8,11}-jre` (or `jetty` for WAR) | The image reference for the base image. The source type can be specified using a [special type prefix](#setting-the-base-image).
+`image` | `String` | `eclipse-temurin:{8,11,17,21}-jre` (or `jetty` for WAR) | The image reference for the base image. The source type can be specified using a [special type prefix](#setting-the-base-image).
 `auth` | [`auth`](#auth-closure) | *None* | Specifies credentials directly (alternative to `credHelper`).
 `credHelper` | `String` | *None* | Specifies a credential helper that can authenticate pulling the base image. This parameter can either be configured as an absolute path to the credential helper executable or as a credential helper suffix (following `docker-credential-`).
-`platforms` | [`platforms`](#platforms-closure) | See [`platforms`](#platforms-closure) | _Incubating feature_: Configures platforms of base images to select from a manifest list.
+`platforms` | [`platforms`](#platforms-closure) | See [`platforms`](#platforms-closure) | Configures platforms of base images to select from a manifest list.
 
 <a name="to-closure"></a>`to` is a closure with the following properties:
 
 Property | Type | Default | Description
 --- | --- | --- | ---
-`image` | `String` | *Required* | The image reference for the target image. This can also be specified via the `--image` command line option.
+`image` | `String` | *Required* | The image reference for the target image. This can also be specified via the `--image` command line option. If the tag is not present here `:latest` is implied.
 `auth` | [`auth`](#auth-closure) | *None* | Specifies credentials directly (alternative to `credHelper`).
 `credHelper` | `String` | *None* | Specifies a credential helper that can authenticate pushing the target image. This parameter can either be configured as an absolute path to the credential helper executable or as a credential helper suffix (following `docker-credential-`).
 `tags` | `List<String>` | *None* | Additional tags to push to.
@@ -246,16 +248,16 @@ Property | Type | Default | Description
 --- | --- | --- | ---
 `appRoot` | `String` | `/app` | The root directory on the container where the app's contents are placed. Particularly useful for WAR-packaging projects to work with different Servlet engine base images by designating where to put exploded WAR contents; see [WAR usage](#war-projects) as an example.
 `args` | `List<String>` | *None* | Additional program arguments appended to the command to start the container (similar to Docker's [CMD](https://docs.docker.com/engine/reference/builder/#cmd) instruction in relation with [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint)). In the default case where you do not set a custom `entrypoint`, this parameter is effectively the arguments to the main method of your Java application.
-`creationTime` | `String` | `EPOCH` | Sets the container creation time. (Note that this property does not affect the file modification times, which are configured using `jib.container.filesModificationTime`.) The value can be `EPOCH` to set the timestamps to Epoch (default behavior), `USE_CURRENT_TIMESTAMP` to forgo reproducibility and use the real creation time, or an ISO 8601 date-time parsable with [`DateTimeFormatter.ISO_DATE_TIME`](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/time/format/DateTimeFormatter.html#ISO_DATE_TIME) such as `2019-07-15T10:15:30+09:00` or `2011-12-03T22:42:05Z`.
-`entrypoint` | `List<String>` | *None* | The command to start the container with (similar to Docker's [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) instruction). If set, then `jvmFlags`, `mainClass`, `extraClasspath`, and `expandClasspathDependencies` are ignored. You may also set `jib.container.entrypoint = 'INHERIT'` to indicate that the `entrypoint` and `args` should be inherited from the base image.\*
+`creationTime` | `String` | `EPOCH` | Sets the container creation time. (Note that this property does not affect the file modification times, which are configured using `jib.container.filesModificationTime`.) The value can be `EPOCH` to set the timestamps to Epoch (default behavior), `USE_CURRENT_TIMESTAMP` to forgo reproducibility and use the real creation time, or an ISO 8601 date-time parsable with [`DateTimeFormatter.ISO_DATE_TIME`](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/time/format/DateTimeFormatter.html#ISO_DATE_TIME) such as `2019-07-15T10:15:30+09:00` or `2011-12-03T22:42:05Z`. The value can also be initialized [lazily](https://docs.gradle.org/current/userguide/lazy_configuration.html) with a provider.
+`entrypoint` | `List<String>` | *None* | The command to start the container with (similar to Docker's [ENTRYPOINT](https://docs.docker.com/engine/reference/builder/#entrypoint) instruction). If set, then `jvmFlags`, `mainClass`, `extraClasspath`, and `expandClasspathDependencies` are ignored. You may also set `jib.container.entrypoint = 'INHERIT'` to indicate that the `entrypoint` and `args` should be inherited from the base image.\* The value can also be initialized [lazily](https://docs.gradle.org/current/userguide/lazy_configuration.html) with a provider.
 `environment` | `Map<String, String>` | *None* | Key-value pairs for setting environment variables on the container (similar to Docker's [ENV](https://docs.docker.com/engine/reference/builder/#env) instruction).
 `extraClasspath` | `List<String>` | *None* | Additional paths in the container to prepend to the computed Java classpath.
 `expandClasspathDependencies` | `boolean` | `false` | <ul><li>Java 8 *or* Jib < 3.1: When set to true, does not use a wildcard (for example, `/app/lib/*`) for dependency JARs in the default Java runtime classpath but instead enumerates the JARs. Has the effect of preserving the classpath loading order as defined by the Gradle project.</li><li>Java >= 9 *and* Jib >= 3.1: The option has no effect. Jib *always* enumerates the dependency JARs. This is achieved by [creating and using an argument file](#custom-container-entrypoint) for the `--class-path` JVM argument.</li></ul>
-`filesModificationTime` | `String` | `EPOCH_PLUS_SECOND` | Sets the modification time (last modified time) of files in the image put by Jib. (Note that this does not set the image creation time, which can be set using `jib.container.creationTime`.) The value should either be `EPOCH_PLUS_SECOND` to set the timestamps to Epoch + 1 second (default behavior), or an ISO 8601 date-time parsable with [`DateTimeFormatter.ISO_DATE_TIME`](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/time/format/DateTimeFormatter.html#ISO_DATE_TIME) such as `2019-07-15T10:15:30+09:00` or `2011-12-03T22:42:05Z`.
+`filesModificationTime` | `String` | `EPOCH_PLUS_SECOND` | Sets the modification time (last modified time) of files in the image put by Jib. (Note that this does not set the image creation time, which can be set using `jib.container.creationTime`.) The value should either be `EPOCH_PLUS_SECOND` to set the timestamps to Epoch + 1 second (default behavior), or an ISO 8601 date-time parsable with [`DateTimeFormatter.ISO_DATE_TIME`](https://docs.oracle.com/en/java/javase/11/docs/api/java.base/java/time/format/DateTimeFormatter.html#ISO_DATE_TIME) such as `2019-07-15T10:15:30+09:00` or `2011-12-03T22:42:05Z`. The value can also be initialized [lazily](https://docs.gradle.org/current/userguide/lazy_configuration.html) with a provider.
 `format` | `String` | `Docker` | Use `OCI` to build an [OCI container image](https://www.opencontainers.org/).
-`jvmFlags` | `List<String>` | *None* | Additional flags to pass into the JVM when running your application.
+`jvmFlags` | `List<String>` | *None* | Additional flags to pass into the JVM when running your application. The value can also be initialized [lazily](https://docs.gradle.org/current/userguide/lazy_configuration.html) with a provider.
 `labels` | `Map<String, String>` | *None* | Key-value pairs for applying image metadata (similar to Docker's [LABEL](https://docs.docker.com/engine/reference/builder/#label) instruction).
-`mainClass` | `String` | *Inferred*\*\* | The main class to launch your application from.
+`mainClass` | `String` | *Inferred*\*\* | The main class to launch your application from. The value can also be initialized [lazily](https://docs.gradle.org/current/userguide/lazy_configuration.html) with a provider.
 `ports` | `List<String>` | *None* | Ports that the container exposes at runtime (similar to Docker's [EXPOSE](https://docs.docker.com/engine/reference/builder/#expose) instruction).
 `user` | `String` | *None* | The user and group to run the container as. The value can be a username or UID along with an optional groupname or GID. The following are all valid: `user`, `uid`, `user:group`, `uid:gid`, `uid:group`, `user:gid`.
 `volumes` | `List<String>` | *None* | Specifies a list of mount points on the container.
@@ -289,7 +291,7 @@ Property | Type | Default | Description
 
 Property | Type | Default | Description
 --- | --- | --- | ---
-`executable` | `File` | `docker` | Sets the path to the Docker executable that is called to load the image into the Docker daemon.
+`executable` | `File` | `docker` | Sets the path to the Docker executable that is called to load the image into the Docker daemon. **Please note**: Users are responsible for ensuring that the Docker path passed in is valid and has the right permissions to be executed.
 `environment` | `Map<String, String>` | *None* | Sets environment variables used by the Docker executable.
 
 #### System Properties
@@ -312,7 +314,7 @@ The following table contains additional system properties that are not available
 Property | Type | Default | Description
 --- | --- | --- | ---
 `jib.httpTimeout` | `int` | `20000` | HTTP connection/read timeout for registry interactions, in milliseconds. Use a value of `0` for an infinite timeout.
-`jib.useOnlyProjectCache` | `boolean` | `false` | If set to true, Jib does not share a cache between different Maven projects.
+`jib.useOnlyProjectCache` | `boolean` | `false` | If set to true, Jib does not share a cache between different Gradle projects.
 `jib.baseImageCache` | `File` | *Platform-dependent*\*\*\* | Sets the directory to use for caching base image layers. This cache can (and should) be shared between multiple images.
 `jib.applicationCache` | `File` | `[project dir]/build/jib-cache` | Sets the directory to use for caching application layers. This cache can be shared between multiple images.
 `jib.console` | `String` | *None* | If set to `plain`, Jib will print plaintext log messages rather than display a progress bar during the build.
@@ -324,7 +326,7 @@ Property | Type | Default | Description
 *\*\*\* The default base image cache is in the following locations on each platform:*
  * *Linux: `[cache root]/google-cloud-tools-java/jib/`, where `[cache root]` is `$XDG_CACHE_HOME` (`$HOME/.cache/` if not set)*
  * *Mac: `[cache root]/Google/Jib/`, where `[cache root]` is `$XDG_CACHE_HOME` (`$HOME/Library/Caches/` if not set)*
- * *Windows: `[cache root]\Google\Jib\Cache`, where `[cache root]` is `$XDG_CACHE_HOME` (`%LOCALAPPDATA%` if not set)*
+ * *Windows: `[cache root]\Google\Jib\Cache`, where `[cache root]` is `%XDG_CACHE_HOME%` (`%LOCALAPPDATA%` if not set)*
 
 ### Global Jib Configuration
 
@@ -332,12 +334,12 @@ Some options can be set in the global Jib configuration file. The file is at the
 
 * *Linux: `[config root]/google-cloud-tools-java/jib/config.json`, where `[config root]` is `$XDG_CONFIG_HOME` (`$HOME/.config/` if not set)*
 * *Mac: `[config root]/Google/Jib/config.json`, where `[config root]` is `$XDG_CONFIG_HOME` (`$HOME/Library/Preferences/Config/` if not set)*
-* *Windows: `[config root]\Google\Jib\Config\config.json`, where `[config root]` is `$XDG_CONFIG_HOME` (`%LOCALAPPDATA%` if not set)*
+* *Windows: `[config root]\Google\Jib\Config\config.json`, where `[config root]` is `%XDG_CONFIG_HOME%` (`%LOCALAPPDATA%` if not set)*
 
-#### Properties 
+#### Properties
 
 * `disableUpdateCheck`: when set to true, disables the periodic up-to-date version check.
-* `registryMirrors`: a list of mirror settings for each base image registry. In the following example, if the base image configured in Jib is for a Docker Hub image, then `mirror.gcr.io`, `localhost:5000`, and the Docker Hub (`registry-1.docker.io`) are tried in order until Jib can successfuly pull a base image.
+* `registryMirrors`: a list of mirror settings for each base image registry. In the following example, if the base image configured in Jib is for a Docker Hub image, then `mirror.gcr.io`, `localhost:5000`, and the Docker Hub (`registry-1.docker.io`) are tried in order until Jib can successfully pull a base image.
 
 ```json
 {
@@ -393,8 +395,8 @@ There are three different types of base images that Jib accepts: an image from a
 
 Prefix | Example | Type
 --- | --- | ---
-*None* | `adoptopenjdk:11-jre` | Pulls the base image from a registry.
-`registry://` | `registry://adoptopenjdk:11-jre` | Pulls the base image from a registry.
+*None* | `openjdk:11-jre` | Pulls the base image from a registry.
+`registry://` | `registry://eclipse-temurin:11-jre` | Pulls the base image from a registry.
 `docker://` | `docker://busybox` | Retrieves the base image from the Docker daemon.
 `tar://` | `tar:///path/to/file.tar` | Uses an image tarball stored at the specified path as the base image. Also accepts relative paths (e.g. `tar://build/jib-image.tar`).
 
@@ -458,9 +460,37 @@ Using `paths` as a closure, you may also specify the target of the copy and incl
   }
 ```
 
+You can also configure `paths` and `permissions` through [lazy configuration in Gradle](https://docs.gradle.org/current/userguide/lazy_configuration.html), using providers in `build.gradle`:
+
+```groovy
+extraDirectories {
+   paths = project.provider { 'src/main/custom-extra-dir' }
+   permissions = project.provider { ['/path/on/container/to/fileA': '755'] }
+}
+```
+
+```groovy
+extraDirectories {
+   paths {
+     path { 
+       from = project.provider { 'src/main/custom-extra-dir' }
+       into = project.provider { '/dest-in-container' }
+       includes = project.provider { ['*.txt', '**/*.txt'] }
+       excludes = project.provider { ['hidden.txt'] }
+    }
+  }
+}
+```
+
 ### Authentication Methods
 
-Pushing/pulling from private registries require authorization credentials. These can be [retrieved using Docker credential helpers](#using-docker-credential-helpers)<!-- or in the `jib` extension-->. If you do not define credentials explicitly, Jib will try to [use credentials defined in your Docker config](/../../issues/101) or infer common credential helpers.
+Pushing/pulling from private registries require authorization credentials.
+
+#### Using Docker configuration files
+
+* Jib looks from credentials from `$XDG_RUNTIME_DIR/containers/auth.json`, `$XDG_CONFIG_HOME/containers/auth.json`, `$HOME/.config/containers/auth.json`, `$DOCKER_CONFIG/config.json`, and `$HOME/.docker/config.json`.
+
+See [this issue](/../../issues/101) and [`man containers-auth.json`](https://www.mankier.com/5/containers-auth.json) for more information about the files.
 
 #### Using Docker Credential Helpers
 
@@ -543,6 +573,21 @@ Therefore, *for example*, the following commands will be able to launch your app
 - (Java 9+) `java -cp @/app/jib-classpath-file @/app/jib-main-class-file`
 - (with shell) `java -cp $( cat /app/jib-classpath-file ) $( cat /app/jib-main-class-file )`
 
+### Reproducible Build Timestamps
+
+To ensure that a Jib build is reproducible, Jib sets the image creation time to the Unix epoch (00:00:00, January 1st, 1970 in UTC) and all file modification times to one second past the epoch by default. See the [Jib FAQ](https://github.com/GoogleContainerTools/jib/blob/master/docs/faq.md#why-is-my-image-created-48-years-ago) for more details on reproducible builds.
+
+Another, more complex way to achieve reproducible builds with stable creation times is to leverage commit timestamps from the project's SCM. For example, the [gradle-git-properties](https://plugins.gradle.org/plugin/com.gorylenko.gradle-git-properties) plugin can be used to inject Git commit information into the current build. These can then be used to configure `jib.container.creationTime`. Since the actual Git information is not yet available at the time the build is configured, it needs to be set through [lazy configuration in Gradle](https://docs.gradle.org/current/userguide/lazy_configuration.html), using a provider in `build.gradle`:
+
+```groovy
+jib {
+   container {
+     creationTime = project.provider { project.ext.git['git.commit.time'] }
+   }
+}
+```
+
+This would build an image with the creation time set to the time of the latest commit from `project.ext.git['git.commit.time']`.
 
 ### Jib Extensions
 

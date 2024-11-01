@@ -28,10 +28,14 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
 import org.gradle.api.Project;
+import org.gradle.api.provider.Property;
+import org.gradle.api.provider.Provider;
+import org.gradle.api.provider.ProviderFactory;
 import org.gradle.testfixtures.ProjectBuilder;
 import org.junit.Before;
 import org.junit.Rule;
@@ -58,7 +62,7 @@ public class JibExtensionTest {
   @Test
   public void testFrom() {
     assertThat(testJibExtension.getFrom().getImage()).isNull();
-    assertThat(testJibExtension.getFrom().getCredHelper()).isNull();
+    assertThat(testJibExtension.getFrom().getCredHelper().getHelper()).isNull();
 
     List<PlatformParameters> defaultPlatforms = testJibExtension.getFrom().getPlatforms().get();
     assertThat(defaultPlatforms).hasSize(1);
@@ -72,16 +76,16 @@ public class JibExtensionTest {
           from.auth(auth -> auth.setUsername("some username"));
           from.auth(auth -> auth.setPassword("some password"));
           from.platforms(
-              platformSpec -> {
-                platformSpec.platform(
-                    platform -> {
-                      platform.setArchitecture("arm");
-                      platform.setOs("windows");
-                    });
-              });
+              platformSpec ->
+                  platformSpec.platform(
+                      platform -> {
+                        platform.setArchitecture("arm");
+                        platform.setOs("windows");
+                      }));
         });
     assertThat(testJibExtension.getFrom().getImage()).isEqualTo("some image");
-    assertThat(testJibExtension.getFrom().getCredHelper()).isEqualTo("some cred helper");
+    assertThat(testJibExtension.getFrom().getCredHelper().getHelper())
+        .isEqualTo("some cred helper");
     assertThat(testJibExtension.getFrom().getAuth().getUsername()).isEqualTo("some username");
     assertThat(testJibExtension.getFrom().getAuth().getPassword()).isEqualTo("some password");
 
@@ -92,9 +96,29 @@ public class JibExtensionTest {
   }
 
   @Test
+  public void testFromCredHelperClosure() {
+    assertThat(testJibExtension.getFrom().getImage()).isNull();
+    assertThat(testJibExtension.getFrom().getCredHelper().getHelper()).isNull();
+
+    testJibExtension.from(
+        from -> {
+          from.setImage("some image");
+          from.credHelper(
+              credHelper -> {
+                credHelper.setHelper("some cred helper");
+                credHelper.setEnvironment(Collections.singletonMap("ENV_VARIABLE", "Value"));
+              });
+        });
+    assertThat(testJibExtension.getFrom().getCredHelper().getHelper())
+        .isEqualTo("some cred helper");
+    assertThat(testJibExtension.getFrom().getCredHelper().getEnvironment())
+        .isEqualTo(Collections.singletonMap("ENV_VARIABLE", "Value"));
+  }
+
+  @Test
   public void testTo() {
     assertThat(testJibExtension.getTo().getImage()).isNull();
-    assertThat(testJibExtension.getTo().getCredHelper()).isNull();
+    assertThat(testJibExtension.getTo().getCredHelper().getHelper()).isNull();
 
     testJibExtension.to(
         to -> {
@@ -104,9 +128,28 @@ public class JibExtensionTest {
           to.auth(auth -> auth.setPassword("some password"));
         });
     assertThat(testJibExtension.getTo().getImage()).isEqualTo("some image");
-    assertThat(testJibExtension.getTo().getCredHelper()).isEqualTo("some cred helper");
+    assertThat(testJibExtension.getTo().getCredHelper().getHelper()).isEqualTo("some cred helper");
     assertThat(testJibExtension.getTo().getAuth().getUsername()).isEqualTo("some username");
     assertThat(testJibExtension.getTo().getAuth().getPassword()).isEqualTo("some password");
+  }
+
+  @Test
+  public void testToCredHelperClosure() {
+    assertThat(testJibExtension.getTo().getImage()).isNull();
+    assertThat(testJibExtension.getTo().getCredHelper().getHelper()).isNull();
+
+    testJibExtension.to(
+        to -> {
+          to.setImage("some image");
+          to.credHelper(
+              credHelper -> {
+                credHelper.setHelper("some cred helper");
+                credHelper.setEnvironment(Collections.singletonMap("ENV_VARIABLE", "Value"));
+              });
+        });
+    assertThat(testJibExtension.getTo().getCredHelper().getHelper()).isEqualTo("some cred helper");
+    assertThat(testJibExtension.getTo().getCredHelper().getEnvironment())
+        .isEqualTo(Collections.singletonMap("ENV_VARIABLE", "Value"));
   }
 
   @Test
@@ -142,9 +185,9 @@ public class JibExtensionTest {
     assertThat(testJibExtension.getContainer().getPorts()).isEmpty();
     assertThat(testJibExtension.getContainer().getLabels().get()).isEmpty();
     assertThat(testJibExtension.getContainer().getAppRoot()).isEmpty();
-    assertThat(testJibExtension.getContainer().getFilesModificationTime())
+    assertThat(testJibExtension.getContainer().getFilesModificationTime().get())
         .isEqualTo("EPOCH_PLUS_SECOND");
-    assertThat(testJibExtension.getContainer().getCreationTime()).isEqualTo("EPOCH");
+    assertThat(testJibExtension.getContainer().getCreationTime().get()).isEqualTo("EPOCH");
 
     testJibExtension.container(
         container -> {
@@ -158,7 +201,8 @@ public class JibExtensionTest {
           container.setPorts(Arrays.asList("1000", "2000-2010", "3000"));
           container.setFormat(ImageFormat.OCI);
           container.setAppRoot("some invalid appRoot value");
-          container.setFilesModificationTime("some invalid time value");
+          container.getFilesModificationTime().set("some invalid time value");
+          container.getCreationTime().set("some other invalid time value");
         });
     ContainerParameters container = testJibExtension.getContainer();
     assertThat(container.getEntrypoint()).containsExactly("foo", "bar", "baz").inOrder();
@@ -173,7 +217,26 @@ public class JibExtensionTest {
     assertThat(container.getPorts()).containsExactly("1000", "2000-2010", "3000").inOrder();
     assertThat(container.getFormat()).isSameInstanceAs(ImageFormat.OCI);
     assertThat(container.getAppRoot()).isEqualTo("some invalid appRoot value");
-    assertThat(container.getFilesModificationTime()).isEqualTo("some invalid time value");
+    assertThat(container.getFilesModificationTime().get()).isEqualTo("some invalid time value");
+    assertThat(container.getCreationTime().get()).isEqualTo("some other invalid time value");
+    testJibExtension.container(
+        extensionContainer -> {
+          extensionContainer.getFilesModificationTime().set((String) null);
+          extensionContainer.getCreationTime().set((String) null);
+        });
+    container = testJibExtension.getContainer();
+    assertThat(container.getFilesModificationTime().get()).isEqualTo("EPOCH_PLUS_SECOND");
+    assertThat(container.getCreationTime().get()).isEqualTo("EPOCH");
+  }
+
+  @Test
+  public void testSetFormat() {
+    testJibExtension.container(
+        container -> {
+          container.setFormat("OCI");
+        });
+    ContainerParameters container = testJibExtension.getContainer();
+    assertThat(container.getFormat()).isSameInstanceAs(ImageFormat.OCI);
   }
 
   @Test
@@ -191,7 +254,7 @@ public class JibExtensionTest {
     assertThat(testJibExtension.getExtraDirectories().getPaths()).hasSize(1);
     assertThat(testJibExtension.getExtraDirectories().getPaths().get(0).getFrom())
         .isEqualTo(fakeProject.getProjectDir().toPath().resolve("src/main/jib"));
-    assertThat(testJibExtension.getExtraDirectories().getPermissions()).isEmpty();
+    assertThat(testJibExtension.getExtraDirectories().getPermissions().get()).isEmpty();
   }
 
   @Test
@@ -199,15 +262,34 @@ public class JibExtensionTest {
     testJibExtension.extraDirectories(
         extraDirectories -> {
           extraDirectories.setPaths("test/path");
-          extraDirectories.setPermissions(ImmutableMap.of("file1", "123", "file2", "456"));
         });
 
     assertThat(testJibExtension.getExtraDirectories().getPaths()).hasSize(1);
     assertThat(testJibExtension.getExtraDirectories().getPaths().get(0).getFrom())
         .isEqualTo(fakeProject.getProjectDir().toPath().resolve("test/path"));
-    assertThat(testJibExtension.getExtraDirectories().getPermissions())
-        .containsExactly("file1", "123", "file2", "456")
-        .inOrder();
+  }
+
+  @Test
+  public void testExtraDirectories_lazyEvaluation_setFromInto() {
+    testJibExtension.extraDirectories(
+        extraDirectories ->
+            extraDirectories.paths(
+                paths -> {
+                  ProviderFactory providerFactory = fakeProject.getProviders();
+                  Provider<Object> from = providerFactory.provider(() -> "test/path");
+                  Provider<String> into = providerFactory.provider(() -> "/target");
+                  paths.path(
+                      path -> {
+                        path.setFrom(from);
+                        path.setInto(into);
+                      });
+                }));
+
+    assertThat(testJibExtension.getExtraDirectories().getPaths()).hasSize(1);
+    assertThat(testJibExtension.getExtraDirectories().getPaths().get(0).getFrom())
+        .isEqualTo(fakeProject.getProjectDir().toPath().resolve("test/path"));
+    assertThat(testJibExtension.getExtraDirectories().getPaths().get(0).getInto())
+        .isEqualTo("/target");
   }
 
   @Test
@@ -260,13 +342,29 @@ public class JibExtensionTest {
   }
 
   @Test
-  public void testExtraDirectories_fileListForPaths() {
+  public void testExtraDirectories_lazyEvaluation_StringListForPaths() {
     testJibExtension.extraDirectories(
         extraDirectories -> {
-          extraDirectories.setPaths(
-              Arrays.asList(
-                  Paths.get("test", "path").toFile(), Paths.get("another", "path").toFile()));
+          ProviderFactory providerFactory = fakeProject.getProviders();
+          Provider<Object> paths =
+              providerFactory.provider(() -> Arrays.asList("test/path", "another/path"));
+          extraDirectories.setPaths(paths);
         });
+
+    assertThat(testJibExtension.getExtraDirectories().getPaths()).hasSize(2);
+    assertThat(testJibExtension.getExtraDirectories().getPaths().get(0).getFrom())
+        .isEqualTo(fakeProject.getProjectDir().toPath().resolve("test/path"));
+    assertThat(testJibExtension.getExtraDirectories().getPaths().get(1).getFrom())
+        .isEqualTo(fakeProject.getProjectDir().toPath().resolve("another/path"));
+  }
+
+  @Test
+  public void testExtraDirectories_fileListForPaths() {
+    testJibExtension.extraDirectories(
+        extraDirectories ->
+            extraDirectories.setPaths(
+                Arrays.asList(
+                    Paths.get("test", "path").toFile(), Paths.get("another", "path").toFile())));
 
     assertThat(testJibExtension.getExtraDirectories().getPaths()).hasSize(2);
     assertThat(testJibExtension.getExtraDirectories().getPaths().get(0).getFrom())
@@ -339,14 +437,22 @@ public class JibExtensionTest {
     System.setProperty("jib.from.image", "fromImage");
     assertThat(testJibExtension.getFrom().getImage()).isEqualTo("fromImage");
     System.setProperty("jib.from.credHelper", "credHelper");
-    assertThat(testJibExtension.getFrom().getCredHelper()).isEqualTo("credHelper");
+    assertThat(testJibExtension.getFrom().getCredHelper().getHelper()).isEqualTo("credHelper");
+
+    System.setProperty("jib.from.platforms", "linux/amd64,darwin/arm64");
+    List<PlatformParameters> platforms = testJibExtension.getFrom().getPlatforms().get();
+    assertThat(platforms).hasSize(2);
+    assertThat(platforms.get(0).getOs()).isEqualTo("linux");
+    assertThat(platforms.get(0).getArchitecture()).isEqualTo("amd64");
+    assertThat(platforms.get(1).getOs()).isEqualTo("darwin");
+    assertThat(platforms.get(1).getArchitecture()).isEqualTo("arm64");
 
     System.setProperty("jib.to.image", "toImage");
     assertThat(testJibExtension.getTo().getImage()).isEqualTo("toImage");
     System.setProperty("jib.to.tags", "tag1,tag2,tag3");
     assertThat(testJibExtension.getTo().getTags()).containsExactly("tag1", "tag2", "tag3");
     System.setProperty("jib.to.credHelper", "credHelper");
-    assertThat(testJibExtension.getTo().getCredHelper()).isEqualTo("credHelper");
+    assertThat(testJibExtension.getTo().getCredHelper().getHelper()).isEqualTo("credHelper");
 
     System.setProperty("jib.container.appRoot", "appRoot");
     assertThat(testJibExtension.getContainer().getAppRoot()).isEqualTo("appRoot");
@@ -387,8 +493,16 @@ public class JibExtensionTest {
     System.setProperty("jib.container.user", "myUser");
     assertThat(testJibExtension.getContainer().getUser()).isEqualTo("myUser");
     System.setProperty("jib.container.filesModificationTime", "2011-12-03T22:42:05Z");
-    assertThat(testJibExtension.getContainer().getFilesModificationTime())
+    testJibExtension
+        .getContainer()
+        .getFilesModificationTime()
+        .set("property should override value");
+    assertThat(testJibExtension.getContainer().getFilesModificationTime().get())
         .isEqualTo("2011-12-03T22:42:05Z");
+    System.setProperty("jib.container.creationTime", "2011-12-03T11:42:05Z");
+    testJibExtension.getContainer().getCreationTime().set("property should override value");
+    assertThat(testJibExtension.getContainer().getCreationTime().get())
+        .isEqualTo("2011-12-03T11:42:05Z");
     System.setProperty("jib.containerizingMode", "packaged");
     assertThat(testJibExtension.getContainerizingMode()).isEqualTo("packaged");
 
@@ -399,7 +513,7 @@ public class JibExtensionTest {
     assertThat(testJibExtension.getExtraDirectories().getPaths().get(1).getFrom())
         .isEqualTo(Paths.get("/bar/baz"));
     System.setProperty("jib.extraDirectories.permissions", "/foo/bar=707,/baz=456");
-    assertThat(testJibExtension.getExtraDirectories().getPermissions())
+    assertThat(testJibExtension.getExtraDirectories().getPermissions().get())
         .containsExactly("/foo/bar", "707", "/baz", "456")
         .inOrder();
 
@@ -410,6 +524,28 @@ public class JibExtensionTest {
     assertThat(testJibExtension.getDockerClient().getEnvironment())
         .containsExactly("env1", "val1", "env2", "val2")
         .inOrder();
+  }
+
+  @Test
+  public void testLazyPropertiesFinalization() {
+    Property<String> filesModificationTime =
+        testJibExtension.getContainer().getFilesModificationTime();
+    filesModificationTime.set((String) null);
+    filesModificationTime.finalizeValue();
+    System.setProperty("jib.container.filesModificationTime", "EPOCH_PLUS_SECOND");
+    assertThat(testJibExtension.getContainer().getFilesModificationTime().get())
+        .isEqualTo("EPOCH_PLUS_SECOND");
+    Property<String> creationTime = testJibExtension.getContainer().getCreationTime();
+    creationTime.set((String) null);
+    creationTime.finalizeValue();
+    System.setProperty("jib.container.creationTime", "EPOCH");
+    assertThat(testJibExtension.getContainer().getCreationTime().get()).isEqualTo("EPOCH");
+  }
+
+  @Test
+  public void testSystemPropertiesWithInvalidPlatform() {
+    System.setProperty("jib.from.platforms", "linux /amd64");
+    assertThrows(IllegalArgumentException.class, testJibExtension.getFrom()::getPlatforms);
   }
 
   @Test
@@ -441,10 +577,7 @@ public class JibExtensionTest {
 
   private TargetImageParameters generateTargetImageParametersWithTags(String... tags) {
     HashSet<String> set = new HashSet<>(Arrays.asList(tags));
-    testJibExtension.to(
-        to -> {
-          to.setTags(set);
-        });
+    testJibExtension.to(to -> to.setTags(set));
     return testJibExtension.getTo();
   }
 }
